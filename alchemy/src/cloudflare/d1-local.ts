@@ -1,28 +1,43 @@
 import * as mf from "miniflare";
+import { Scope } from "../scope.ts";
 import { getDefaultPersistPath } from "./miniflare/paths.ts";
 
 export interface D1LocalMigrationOptions {
-  rootDir: string;
   databaseId: string;
   migrationsTable: string;
   migrations: { id: string; sql: string }[];
 }
 
-export const applyLocalD1Migrations = async (
-  options: D1LocalMigrationOptions,
-) => {
+export interface MiniflareD1Options {
+  id: string;
+  remoteProxyConnectionString?: mf.RemoteProxyConnectionString;
+}
+
+export async function makeMiniflareD1(database: MiniflareD1Options) {
   const miniflare = new mf.Miniflare({
     script: "",
     modules: true,
-    defaultPersistRoot: getDefaultPersistPath(options.rootDir),
+    defaultPersistRoot: getDefaultPersistPath(Scope.current.rootDir),
     d1Persist: true,
-    d1Databases: { DB: options.databaseId },
+    d1Databases: {
+      DB: database,
+    },
     log: process.env.DEBUG ? new mf.Log(mf.LogLevel.DEBUG) : undefined,
   });
+  await miniflare.ready;
+  return {
+    db: await miniflare.getD1Database("DB"),
+    dispose: async () => {
+      await miniflare.dispose();
+    },
+  };
+}
+
+export const applyLocalD1Migrations = async (
+  options: D1LocalMigrationOptions,
+) => {
+  const { db, dispose } = await makeMiniflareD1({ id: options.databaseId });
   try {
-    await miniflare.ready;
-    // TODO(sam): don't use `any` once prisma is fixed upstream
-    const db: any = await miniflare.getD1Database("DB");
     const session: any = db.withSession("first-primary");
     await session
       .prepare(
@@ -58,6 +73,6 @@ export const applyLocalD1Migrations = async (
       await insertRecord.bind(migration.id).run();
     }
   } finally {
-    await miniflare.dispose();
+    await dispose();
   }
 };

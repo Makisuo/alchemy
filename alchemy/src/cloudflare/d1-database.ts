@@ -1,3 +1,4 @@
+import type { D1Database as D1DatabaseApi } from "@cloudflare/workers-types/experimental/index.ts";
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { Scope } from "../scope.ts";
@@ -10,9 +11,14 @@ import {
 } from "./api.ts";
 import { withJurisdiction } from "./bucket.ts";
 import { cloneD1Database } from "./d1-clone.ts";
-import { applyLocalD1Migrations } from "./d1-local-migrations.ts";
+import {
+  applyLocalD1Migrations,
+  makeMiniflareD1,
+  type MiniflareD1Options,
+} from "./d1-local.ts";
 import { applyMigrations, listMigrationsFiles } from "./d1-migrations.ts";
 import { deleteMiniflareBinding } from "./miniflare/delete.ts";
+import { createRemoteProxyWorker } from "./miniflare/remote-binding-proxy.ts";
 
 const DEFAULT_MIGRATIONS_TABLE = "d1_migrations";
 
@@ -252,12 +258,12 @@ export type D1Database = Pick<
 export async function D1Database(
   id: string,
   props: Omit<D1DatabaseProps, "migrationsFiles"> = {},
-): Promise<D1Database> {
+): Promise<D1Database & Lazy<D1DatabaseApi>> {
   const migrationsFiles = props.migrationsDir
     ? await listMigrationsFiles(props.migrationsDir)
     : [];
 
-  return _D1Database(id, {
+  const database = await _D1Database(id, {
     ...props,
     migrationsFiles,
     dev: {
@@ -267,6 +273,71 @@ export async function D1Database(
       force: Scope.current.local,
     },
   });
+
+  return makeProxy(database, async () => {
+    let ref: MiniflareD1Options;
+    if (Scope.current.local && !props.dev?.remote) {
+      ref = { id: database.dev.id };
+    } else {
+      const api = await createCloudflareApi(props);
+      const proxy = await createRemoteProxyWorker({
+        api,
+        name: `d1-${database.id}`,
+        bindings: [{ name: "DB", type: "d1", id: database.id }],
+      });
+      Scope.current.onCleanup(async () => {
+        await proxy.server.close();
+      });
+      ref = {
+        id: database.dev.id,
+        remoteProxyConnectionString: proxy.connectionString,
+      };
+    }
+    const { db, dispose } = await makeMiniflareD1(ref);
+    Scope.current.onCleanup(async () => {
+      await dispose();
+    });
+    return db;
+  }, ["batch", "dump", "exec", "prepare", "withSession"]);
+}
+
+type Lazy<T> = T[keyof T] extends (...args: any[]) => Promise<any>
+  ? T
+  : {
+      [k in keyof T]: EnsurePromiseReturnType<T[k]>;
+    };
+
+type EnsurePromiseReturnType<T> = T extends (
+  ...args: infer Args
+) => infer Return
+  ? (...args: Args) => Return extends Promise<any> ? Return : Promise<Return>
+  : never;
+
+function makeProxy<Target extends object, Functions>(
+  target: Target,
+  make: () => Promise<Functions>,
+  properties: (keyof Functions)[],
+): Target & Lazy<Functions> {
+  let promise: Promise<Functions> | undefined;
+  return new Proxy(target, {
+    get(target, prop) {
+      if (!properties.includes(prop as keyof Functions)) {
+        return Reflect.get(target, prop);
+      }
+      return async (...args: any[]) => {
+        promise ??= make();
+        const obj = await promise;
+        // @ts-expect-error - prop is a valid key of T
+        return obj[prop as keyof T].apply(obj, args);
+      };
+    },
+    has(target, prop) {
+      return (
+        properties.includes(prop as keyof Functions) ||
+        Reflect.has(target, prop)
+      );
+    },
+  }) as Target & Lazy<Functions>;
 }
 
 const _D1Database = Resource(
@@ -297,7 +368,6 @@ const _D1Database = Resource(
           databaseId: dev.id,
           migrationsTable: props.migrationsTable ?? DEFAULT_MIGRATIONS_TABLE,
           migrations: props.migrationsFiles,
-          rootDir: this.scope.rootDir,
         });
       }
       return {
