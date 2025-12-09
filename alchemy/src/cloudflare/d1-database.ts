@@ -1,4 +1,4 @@
-import type { D1Database as D1DatabaseType } from "@cloudflare/workers-types/experimental/index.ts";
+import type { D1Database as D1DatabaseApi } from "@cloudflare/workers-types/experimental/index.ts";
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { Scope } from "../scope.ts";
@@ -177,7 +177,7 @@ export type D1Database = Pick<
    * The jurisdiction of the database
    */
   jurisdiction: D1DatabaseJurisdiction;
-} & Lazy<D1DatabaseType>;
+} & Lazy<D1DatabaseApi>;
 
 /**
  * Creates and manages Cloudflare D1 Databases.
@@ -298,7 +298,7 @@ export async function D1Database(
       await dispose();
     });
     return db;
-  }, ["batch", "dump", "exec", "prepare", "withSession"]) as D1Database;
+  }, ["batch", "dump", "exec", "prepare", "withSession"]);
 }
 
 type Lazy<T> = T[keyof T] extends (...args: any[]) => Promise<any>
@@ -346,7 +346,7 @@ const _D1Database = Resource(
     this: Context<D1Database>,
     id: string,
     props: D1DatabaseProps,
-  ): Promise<D1Database> {
+  ): Promise<Omit<D1Database, keyof D1DatabaseApi>> {
     const databaseName =
       props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
     const jurisdiction = props.jurisdiction ?? "default";
