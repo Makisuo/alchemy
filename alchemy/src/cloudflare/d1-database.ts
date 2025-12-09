@@ -298,7 +298,7 @@ export async function D1Database(
       await dispose();
     });
     return db;
-  }, ["batch", "dump", "exec", "prepare", "withSession"]);
+  }, ["batch", "dump", "exec", "prepare", "withSession"]) as D1Database;
 }
 
 type Lazy<T> = T[keyof T] extends (...args: any[]) => Promise<any>
