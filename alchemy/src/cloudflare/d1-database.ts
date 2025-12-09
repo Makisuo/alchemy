@@ -1,4 +1,4 @@
-import type { D1Database as D1DatabaseApi } from "@cloudflare/workers-types/experimental/index.ts";
+import type { D1Database as D1DatabaseType } from "@cloudflare/workers-types/experimental/index.ts";
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { Scope } from "../scope.ts";
@@ -177,7 +177,7 @@ export type D1Database = Pick<
    * The jurisdiction of the database
    */
   jurisdiction: D1DatabaseJurisdiction;
-};
+} & Lazy<D1DatabaseType>;
 
 /**
  * Creates and manages Cloudflare D1 Databases.
@@ -258,7 +258,7 @@ export type D1Database = Pick<
 export async function D1Database(
   id: string,
   props: Omit<D1DatabaseProps, "migrationsFiles"> = {},
-): Promise<D1Database & Lazy<D1DatabaseApi>> {
+): Promise<D1Database> {
   const migrationsFiles = props.migrationsDir
     ? await listMigrationsFiles(props.migrationsDir)
     : [];
