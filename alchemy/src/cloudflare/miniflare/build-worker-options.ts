@@ -69,8 +69,7 @@ export const buildWorkerOptions = async (
   watch: (signal: AbortSignal) => AsyncGenerator<miniflare.WorkerOptions>;
   remoteProxy: HTTPServer | undefined;
 }> => {
-  const remoteBindings: RemoteBinding[] = [];
-  const options: Partial<BaseWorkerOptions> = {
+  const baseOptions: Partial<BaseWorkerOptions> = {
     name: input.name,
     compatibilityDate: input.compatibilityDate,
     compatibilityFlags: input.compatibilityFlags,
@@ -85,6 +84,73 @@ export const buildWorkerOptions = async (
     routes: [input.name],
   };
   const port = input.port ?? (await reservePort(input.name));
+  const { options: bindingsOptions, remoteProxy } = await buildBindings({
+    api: input.api,
+    name: input.name,
+    bindings: input.bindings ?? {},
+    eventSources: input.eventSources ?? [],
+    assets: input.assets,
+    port,
+    cwd: input.cwd,
+  });
+  async function* watch(signal: AbortSignal) {
+    for await (const bundle of input.bundle.watch(signal)) {
+      const { modules, rootPath } = normalizeBundle(bundle);
+      yield {
+        ...baseOptions,
+        ...bindingsOptions,
+        modules,
+        rootPath,
+      };
+    }
+  }
+  return {
+    watch,
+    remoteProxy,
+  };
+};
+
+export function setPersistenceOptions(
+  options: miniflare.MiniflareOptions,
+  worker: Partial<miniflare.WorkerOptions>,
+) {
+  if (worker.analyticsEngineDatasets) {
+    options.analyticsEngineDatasetsPersist = true;
+  }
+  if (worker.d1Databases) {
+    options.d1Persist = true;
+  }
+  if (worker.durableObjects) {
+    options.durableObjectsPersist = true;
+  }
+  if (worker.kvNamespaces) {
+    options.kvPersist = true;
+  }
+  if (worker.r2Buckets) {
+    options.r2Persist = true;
+  }
+  if (worker.secretsStoreSecrets) {
+    options.secretsStorePersist = true;
+  }
+  if (worker.workflows) {
+    options.workflowsPersist = true;
+  }
+}
+
+export async function buildBindings(input: {
+  api: CloudflareApi;
+  name: string;
+  bindings: Bindings;
+  eventSources: EventSource[] | undefined;
+  assets?: AssetsConfig;
+  port: number;
+  cwd: string;
+}): Promise<{
+  options: Partial<BaseWorkerOptions>;
+  remoteProxy: HTTPServer | undefined;
+}> {
+  const options: Partial<BaseWorkerOptions> = {};
+  const remoteBindings: RemoteBinding[] = [];
   for (const [key, binding] of Object.entries(input.bindings ?? {})) {
     if (typeof binding === "string") {
       (options.bindings ??= {})[key] = binding;
@@ -95,11 +161,11 @@ export const buildWorkerOptions = async (
       continue;
     }
     if (binding.type === "cloudflare::Worker::DevDomain") {
-      (options.bindings ??= {})[key] = `localhost:${port}`;
+      (options.bindings ??= {})[key] = `localhost:${input.port}`;
       continue;
     }
     if (binding.type === "cloudflare::Worker::DevUrl") {
-      (options.bindings ??= {})[key] = `http://localhost:${port}`;
+      (options.bindings ??= {})[key] = `http://localhost:${input.port}`;
       continue;
     }
     switch (binding.type) {
@@ -363,16 +429,6 @@ export const buildWorkerOptions = async (
       (options.queueConsumers ??= {})[eventSource.name] = {};
     }
   }
-  async function* watch(signal: AbortSignal) {
-    for await (const bundle of input.bundle.watch(signal)) {
-      const { modules, rootPath } = normalizeBundle(bundle);
-      yield {
-        ...options,
-        modules,
-        rootPath,
-      };
-    }
-  }
   if (remoteBindings.length > 0) {
     const remoteProxy = await createRemoteProxyWorker({
       api: input.api,
@@ -453,15 +509,15 @@ export const buildWorkerOptions = async (
       }
     }
     return {
-      watch,
+      options,
       remoteProxy: remoteProxy.server,
     };
   }
   return {
-    watch,
+    options,
     remoteProxy: undefined,
   };
-};
+}
 
 const moduleTypes = {
   esm: "ESModule",
