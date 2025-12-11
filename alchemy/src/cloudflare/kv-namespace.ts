@@ -1,4 +1,3 @@
-import type { KVNamespace as KVNamespaceType } from "@cloudflare/workers-types";
 import * as mf from "miniflare";
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
@@ -138,7 +137,7 @@ export type KVNamespace = Omit<KVNamespaceProps, "delete" | "dev"> & {
      */
     remote: boolean;
   };
-} & KVNamespaceType;
+} & globalThis.KVNamespace;
 
 /**
  * A Cloudflare KV Namespace is a key-value store that can be used to store data for your application.
@@ -226,7 +225,7 @@ const _KVNamespace = Resource(
     this: Context<KVNamespace>,
     id: string,
     props: KVNamespaceProps,
-  ): Promise<Omit<KVNamespace, keyof KVNamespaceType>> {
+  ): Promise<Omit<KVNamespace, keyof globalThis.KVNamespace>> {
     const title =
       props.title ?? this.output?.title ?? this.scope.createPhysicalName(id);
 

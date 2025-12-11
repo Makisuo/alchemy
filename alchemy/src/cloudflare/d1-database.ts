@@ -1,4 +1,3 @@
-import type { D1Database as D1DatabaseType } from "@cloudflare/workers-types";
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { Scope } from "../scope.ts";
@@ -176,7 +175,7 @@ export type D1Database = Pick<
    * The jurisdiction of the database
    */
   jurisdiction: D1DatabaseJurisdiction;
-} & D1DatabaseType;
+} & globalThis.D1Database;
 
 /**
  * Creates and manages Cloudflare D1 Databases.
@@ -331,7 +330,7 @@ const _D1Database = Resource(
     this: Context<D1Database>,
     id: string,
     props: D1DatabaseProps,
-  ): Promise<Omit<D1Database, keyof D1DatabaseType>> {
+  ): Promise<Omit<D1Database, keyof globalThis.D1Database>> {
     const databaseName =
       props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
     const jurisdiction = props.jurisdiction ?? "default";

@@ -1,4 +1,3 @@
-import type { R2PutOptions } from "@cloudflare/workers-types/experimental/index.ts";
 import type { Context } from "../context.ts";
 import { Resource } from "../resource.ts";
 import { createCloudflareApi, type CloudflareApiOptions } from "./api.ts";
@@ -113,7 +112,6 @@ export const R2Object = Resource(
       // Create or update the object in the bucket
       const response = await props.bucket.put(
         props.key,
-        // @ts-expect-error - ReadableStream types are incompatible
         props.content,
         props.options,
       );

@@ -451,14 +451,15 @@ describe("R2 Bucket Resource", async () => {
       const testContent = "Hello, R2 Bucket Operations!";
       const updatedContent = "Updated content for testing";
       await bucket.delete(testKey);
-      let putObj = await bucket.put(testKey, testContent);
+      // TODO(john): this is a problem with @cloudflare/workers-types, it should not be nullable unless options.onlyIf is used
+      let putObj = (await bucket.put(testKey, testContent)) as R2Object;
       expect(putObj.size).toBeTypeOf("number");
       expect(putObj.size).toEqual(testContent.length);
       let obj = await bucket.head(testKey);
       expect(obj).toBeDefined();
       expect(obj?.etag).toEqual(putObj.etag);
       expect(obj?.size).toEqual(putObj.size);
-      putObj = await bucket.put(testKey, updatedContent);
+      putObj = (await bucket.put(testKey, updatedContent)) as R2Object;
       obj = await bucket.head(testKey);
       expect(obj?.etag).toEqual(putObj.etag);
       const getObj = await bucket.get(testKey);

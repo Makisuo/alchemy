@@ -1,4 +1,3 @@
-import type { R2Bucket as R2BucketType } from "@cloudflare/workers-types";
 import type { R2PutOptions } from "@cloudflare/workers-types/experimental/index.ts";
 import { isDeepStrictEqual } from "node:util";
 import type { Context } from "../context.ts";
@@ -308,7 +307,7 @@ export type R2Objects = {
     }
 );
 
-export type R2Bucket = _R2Bucket & R2BucketType;
+export type R2Bucket = _R2Bucket & globalThis.R2Bucket;
 
 /**
  * Output returned after R2 Bucket creation/update
@@ -458,7 +457,7 @@ export async function R2Bucket(
   return makeAsyncProxyForBinding({
     apiOptions: props,
     name: id,
-    binding: bucket as Omit<R2Bucket, keyof R2BucketType>,
+    binding: bucket as Omit<R2Bucket, keyof globalThis.R2Bucket>,
     properties: {
       createMultipartUpload: true,
       delete: true,

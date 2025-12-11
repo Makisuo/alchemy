@@ -1,4 +1,3 @@
-import type { Queue as QueueType } from "@cloudflare/workers-types";
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { Scope } from "../scope.ts";
@@ -150,7 +149,7 @@ export type Queue<Body = unknown> = Omit<QueueProps, "dev"> & {
      */
     remote: boolean;
   };
-} & QueueType;
+} & globalThis.Queue<Body>;
 
 /**
  * Creates and manages Cloudflare Queues.
@@ -256,7 +255,7 @@ export async function Queue<T = unknown>(
 const _Queue = Resource("cloudflare::Queue", async function <
   T = unknown,
 >(this: Context<Queue<T>>, id: string, props: QueueProps = {}): Promise<
-  Omit<Queue<T>, keyof QueueType>
+  Omit<Queue<T>, keyof globalThis.Queue>
 > {
   const queueName =
     props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);

@@ -8,7 +8,7 @@ import { getDefaultPersistPath } from "./paths.ts";
 
 export function makeAsyncProxyForBinding<
   B extends Extract<Binding, object>,
-  P extends Properties<Bound<B>>,
+  const P extends Properties<Bound<B>>,
 >(input: {
   apiOptions: CloudflareApiOptions;
   name: string;
