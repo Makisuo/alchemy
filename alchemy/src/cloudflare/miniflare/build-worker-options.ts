@@ -73,13 +73,6 @@ export const buildWorkerOptions = async (
     name: input.name,
     compatibilityDate: input.compatibilityDate,
     compatibilityFlags: input.compatibilityFlags,
-    unsafeDirectSockets: [
-      // This matches the Wrangler configuration by exposing the default handler (e.g. `export default { fetch }`).
-      {
-        entrypoint: "default",
-        proxy: true,
-      },
-    ],
     // This exposes the worker as a route that can be accessed by setting the MF-Route-Override header.
     routes: [input.name],
   };
@@ -122,7 +115,15 @@ export async function buildBindings(input: {
   options: Partial<BaseWorkerOptions>;
   remoteProxy: HTTPServer | undefined;
 }> {
-  const options: Partial<BaseWorkerOptions> = {};
+  const options: Partial<BaseWorkerOptions> = {
+    unsafeDirectSockets: [
+      // This matches the Wrangler configuration by exposing the default handler (e.g. `export default { fetch }`).
+      {
+        entrypoint: "default",
+        proxy: true,
+      },
+    ],
+  };
   const remoteBindings: RemoteBinding[] = [];
   for (const [key, binding] of Object.entries(input.bindings ?? {})) {
     if (typeof binding === "string") {
