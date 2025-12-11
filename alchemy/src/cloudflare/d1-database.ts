@@ -1,3 +1,4 @@
+import type { D1Database as D1DatabaseType } from "@cloudflare/workers-types";
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { Scope } from "../scope.ts";
@@ -13,6 +14,10 @@ import { cloneD1Database } from "./d1-clone.ts";
 import { applyLocalD1Migrations } from "./d1-local-migrations.ts";
 import { applyMigrations, listMigrationsFiles } from "./d1-migrations.ts";
 import { deleteMiniflareBinding } from "./miniflare/delete.ts";
+import {
+  makeAsyncProxyForBinding,
+  type Lazy,
+} from "./miniflare/node-binding.ts";
 
 const DEFAULT_MIGRATIONS_TABLE = "d1_migrations";
 
@@ -171,7 +176,7 @@ export type D1Database = Pick<
    * The jurisdiction of the database
    */
   jurisdiction: D1DatabaseJurisdiction;
-};
+} & Lazy<D1DatabaseType>;
 
 /**
  * Creates and manages Cloudflare D1 Databases.
@@ -257,7 +262,7 @@ export async function D1Database(
     ? await listMigrationsFiles(props.migrationsDir)
     : [];
 
-  return _D1Database(id, {
+  const database = await _D1Database(id, {
     ...props,
     migrationsFiles,
     dev: {
@@ -267,6 +272,13 @@ export async function D1Database(
       force: Scope.current.local,
     },
   });
+
+  return makeAsyncProxyForBinding({
+    apiOptions: props,
+    name: id,
+    binding: database,
+    properties: ["prepare", "batch", "exec", "withSession", "dump"],
+  });
 }
 
 const _D1Database = Resource(
@@ -275,7 +287,7 @@ const _D1Database = Resource(
     this: Context<D1Database>,
     id: string,
     props: D1DatabaseProps,
-  ): Promise<D1Database> {
+  ): Promise<Omit<D1Database, keyof D1DatabaseType>> {
     const databaseName =
       props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
     const jurisdiction = props.jurisdiction ?? "default";

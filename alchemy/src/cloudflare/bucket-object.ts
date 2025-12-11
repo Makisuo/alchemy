@@ -113,6 +113,7 @@ export const R2Object = Resource(
       // Create or update the object in the bucket
       const response = await props.bucket.put(
         props.key,
+        // @ts-expect-error - ReadableStream types are incompatible
         props.content,
         props.options,
       );

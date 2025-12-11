@@ -1,3 +1,4 @@
+import type { Queue as QueueType } from "@cloudflare/workers-types";
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { Scope } from "../scope.ts";
@@ -7,6 +8,10 @@ import {
   type CloudflareApi,
   type CloudflareApiOptions,
 } from "./api.ts";
+import {
+  makeAsyncProxyForBinding,
+  type Lazy,
+} from "./miniflare/node-binding.ts";
 
 /**
  * Settings for a Cloudflare Queue
@@ -148,7 +153,7 @@ export type Queue<Body = unknown> = Omit<QueueProps, "dev"> & {
      */
     remote: boolean;
   };
-};
+} & Lazy<QueueType>;
 
 /**
  * Creates and manages Cloudflare Queues.
@@ -233,19 +238,25 @@ export async function Queue<T = unknown>(
   id: string,
   props: QueueProps = {},
 ): Promise<Queue<T>> {
-  return await _Queue(id, {
+  const queue = await _Queue<T>(id, {
     ...props,
     dev: {
       ...(props.dev ?? {}),
       force: Scope.current.local,
     },
   });
+  return makeAsyncProxyForBinding({
+    apiOptions: props,
+    name: id,
+    binding: queue,
+    properties: ["send", "sendBatch"],
+  });
 }
 
 const _Queue = Resource("cloudflare::Queue", async function <
   T = unknown,
 >(this: Context<Queue<T>>, id: string, props: QueueProps = {}): Promise<
-  Queue<T>
+  Omit<Queue<T>, keyof QueueType>
 > {
   const queueName =
     props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
