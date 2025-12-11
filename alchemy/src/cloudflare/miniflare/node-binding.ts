@@ -73,7 +73,7 @@ export function makeAsyncProxy<
   return new Proxy(target, {
     get(target, prop) {
       const property = properties?.[prop as keyof Omit<Value, keyof Target>];
-      if (properties && !property) {
+      if (Reflect.has(target, prop) || !property) {
         return Reflect.get(target, prop);
       }
       if (typeof property === "function") {
