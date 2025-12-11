@@ -336,7 +336,8 @@ export class Scope {
     const stage = this.stage;
     return [app, ...this.chain.slice(2), id, stage]
       .map((s) => s.replaceAll(/[^a-z0-9_-]/gi, delimiter))
-      .join(delimiter);
+      .join(delimiter)
+      .toLowerCase();
   }
 
   public async spawn<
