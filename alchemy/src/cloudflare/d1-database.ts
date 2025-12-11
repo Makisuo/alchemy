@@ -15,8 +15,8 @@ import { applyLocalD1Migrations } from "./d1-local-migrations.ts";
 import { applyMigrations, listMigrationsFiles } from "./d1-migrations.ts";
 import { deleteMiniflareBinding } from "./miniflare/delete.ts";
 import {
+  makeAsyncProxy,
   makeAsyncProxyForBinding,
-  type Lazy,
 } from "./miniflare/node-binding.ts";
 
 const DEFAULT_MIGRATIONS_TABLE = "d1_migrations";
@@ -176,7 +176,7 @@ export type D1Database = Pick<
    * The jurisdiction of the database
    */
   jurisdiction: D1DatabaseJurisdiction;
-} & Lazy<D1DatabaseType>;
+} & D1DatabaseType;
 
 /**
  * Creates and manages Cloudflare D1 Databases.
@@ -273,11 +273,55 @@ export async function D1Database(
     },
   });
 
+  function makePreparedStatementProxy(
+    promise: Promise<D1PreparedStatement>,
+  ): D1PreparedStatement {
+    return makeAsyncProxy({}, promise, {
+      bind:
+        (promise) =>
+        (...args) =>
+          makePreparedStatementProxy(
+            promise.then((statement) => statement.bind(...args)),
+          ),
+      first: true,
+      run: true,
+      all: true,
+      raw: true,
+    });
+  }
+
   return makeAsyncProxyForBinding({
     apiOptions: props,
     name: id,
     binding: database,
-    properties: ["prepare", "batch", "exec", "withSession", "dump"],
+    properties: {
+      prepare: (promise) => (query) =>
+        makePreparedStatementProxy(
+          promise.then((database) => database.prepare(query)),
+        ),
+      batch: true,
+      exec: true,
+      withSession: (promise) => (constraintOrBookmark) =>
+        makeAsyncProxy(
+          {},
+          promise.then((database) =>
+            database.withSession(constraintOrBookmark),
+          ),
+          {
+            prepare: (session) => (query) =>
+              makePreparedStatementProxy(
+                session.then((session) => session.prepare(query)),
+              ),
+            batch: true,
+            getBookmark: () => () => {
+              throw new Error(
+                "D1DatabaseSession.getBookmark is not implemented",
+              );
+            },
+          },
+        ),
+      dump: true,
+    },
   });
 }
 

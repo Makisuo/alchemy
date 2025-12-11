@@ -8,10 +8,7 @@ import {
   type CloudflareApi,
   type CloudflareApiOptions,
 } from "./api.ts";
-import {
-  makeAsyncProxyForBinding,
-  type Lazy,
-} from "./miniflare/node-binding.ts";
+import { makeAsyncProxyForBinding } from "./miniflare/node-binding.ts";
 
 /**
  * Settings for a Cloudflare Queue
@@ -153,7 +150,7 @@ export type Queue<Body = unknown> = Omit<QueueProps, "dev"> & {
      */
     remote: boolean;
   };
-} & Lazy<QueueType>;
+} & QueueType;
 
 /**
  * Creates and manages Cloudflare Queues.
@@ -249,7 +246,10 @@ export async function Queue<T = unknown>(
     apiOptions: props,
     name: id,
     binding: queue,
-    properties: ["send", "sendBatch"],
+    properties: {
+      send: true,
+      sendBatch: true,
+    },
   });
 }
 

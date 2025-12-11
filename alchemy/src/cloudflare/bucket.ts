@@ -22,8 +22,8 @@ import {
 } from "./bucket-custom-domain.ts";
 import { deleteMiniflareBinding } from "./miniflare/delete.ts";
 import {
+  makeAsyncProxy,
   makeAsyncProxyForBinding,
-  type Lazy,
 } from "./miniflare/node-binding.ts";
 
 export type R2BucketJurisdiction = "default" | "eu" | "fedramp";
@@ -308,7 +308,7 @@ export type R2Objects = {
     }
 );
 
-export type R2Bucket = _R2Bucket & Lazy<R2BucketType>;
+export type R2Bucket = _R2Bucket & R2BucketType;
 
 /**
  * Output returned after R2 Bucket creation/update
@@ -459,15 +459,24 @@ export async function R2Bucket(
     apiOptions: props,
     name: id,
     binding: bucket as Omit<R2Bucket, keyof R2BucketType>,
-    properties: [
-      "createMultipartUpload",
-      "delete",
-      "get",
-      "head",
-      "list",
-      "put",
-      "resumeMultipartUpload",
-    ],
+    properties: {
+      createMultipartUpload: true,
+      delete: true,
+      get: true,
+      head: true,
+      list: true,
+      put: true,
+      resumeMultipartUpload: (promise) => (key: string, uploadId: string) =>
+        makeAsyncProxy(
+          { key, uploadId },
+          promise.then((bucket) => bucket.resumeMultipartUpload(key, uploadId)),
+          {
+            uploadPart: true,
+            abort: true,
+            complete: true,
+          },
+        ),
+    },
   });
 }
 

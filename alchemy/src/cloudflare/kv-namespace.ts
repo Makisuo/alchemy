@@ -15,10 +15,7 @@ import {
   type CloudflareApiOptions,
 } from "./api.ts";
 import { deleteMiniflareBinding } from "./miniflare/delete.ts";
-import {
-  makeAsyncProxyForBinding,
-  type Lazy,
-} from "./miniflare/node-binding.ts";
+import { makeAsyncProxyForBinding } from "./miniflare/node-binding.ts";
 import { getDefaultPersistPath } from "./miniflare/paths.ts";
 
 /**
@@ -141,7 +138,7 @@ export type KVNamespace = Omit<KVNamespaceProps, "delete" | "dev"> & {
      */
     remote: boolean;
   };
-} & Lazy<KVNamespaceType>;
+} & KVNamespaceType;
 
 /**
  * A Cloudflare KV Namespace is a key-value store that can be used to store data for your application.
@@ -213,7 +210,13 @@ export async function KVNamespace(
     apiOptions: props,
     name: id,
     binding: namespace,
-    properties: ["get", "list", "put", "getWithMetadata", "delete"],
+    properties: {
+      get: true,
+      list: true,
+      put: true,
+      getWithMetadata: true,
+      delete: true,
+    },
   });
 }
 
