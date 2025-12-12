@@ -1,10 +1,10 @@
-import { alchemy } from "../alchemy";
-import type { Context } from "../context";
-import { Resource } from "../resource";
-import { createPlanetScaleClient, type PlanetScaleProps } from "./api";
-import type { Branch } from "./branch";
-import type { Database } from "./database";
-import type { Role } from "./role";
+import { alchemy } from "../alchemy.ts";
+import type { Context } from "../context.ts";
+import { Resource } from "../resource.ts";
+import { createPlanetScaleClient, type PlanetScaleProps } from "./api.ts";
+import type { Branch } from "./branch.ts";
+import type { Database } from "./database.ts";
+import type { Role } from "./role.ts";
 
 export interface DefaultRoleProps extends PlanetScaleProps {
   /**
