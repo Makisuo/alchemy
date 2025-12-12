@@ -5,6 +5,7 @@ import { createPlanetScaleClient, type PlanetScaleProps } from "./api.ts";
 import type { Branch } from "./branch.ts";
 import type { Database } from "./database.ts";
 import type { Role } from "./role.ts";
+import { waitForBranchReady } from "./utils.ts";
 
 export interface DefaultRoleProps extends PlanetScaleProps {
   /**
@@ -91,6 +92,7 @@ export const DefaultRole = Resource(
             );
           }
         }
+        await waitForBranchReady(api, organization, database, branch);
         const { data } = await api.resetDefaultRole({
           path: {
             organization,
