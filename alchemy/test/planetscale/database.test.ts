@@ -37,6 +37,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           name,
           clusterSize: "PS_10",
           kind,
+          delete: true,
         });
 
         expect(database).toMatchObject({
@@ -93,6 +94,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           migrationFramework: "rails",
           migrationTableName: "schema_migrations",
           kind,
+          delete: true,
         });
 
         expect(database).toMatchObject({
@@ -131,6 +133,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           migrationFramework: "django",
           migrationTableName: "django_migrations",
           kind,
+          delete: true,
         });
 
         expect(database).toMatchObject({
@@ -177,6 +180,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           clusterSize: "PS_10",
           defaultBranch,
           kind,
+          delete: true,
         });
 
         expect(database).toMatchObject({
@@ -206,6 +210,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           clusterSize: "PS_20",
           defaultBranch,
           kind,
+          delete: true,
         });
 
         // Verify branch cluster size was updated
@@ -245,6 +250,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
             clusterSize: "PS_10",
             kind: "postgresql",
             arch: "arm",
+            delete: true,
           });
           expect(database).toMatchObject({
             id: expect.any(String),

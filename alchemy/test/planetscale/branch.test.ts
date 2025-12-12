@@ -36,6 +36,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
         organization: organizationName,
         clusterSize: "PS_10",
         kind,
+        delete: true,
       } as DatabaseProps;
       database = await Database("branch-test", props);
       await waitForDatabaseReady(api, organizationName, database.name);
@@ -57,6 +58,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           organization: organizationName,
           database: database.name,
           isProduction: false,
+          delete: true,
         });
 
         // Try to create the same branch with adopt=true
@@ -66,6 +68,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           database: database.name,
           adopt: true,
           isProduction: false,
+          delete: true,
         });
 
         expect(branch).toMatchObject({
@@ -113,6 +116,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           database: database.name,
           isProduction: false,
           parentBranch: "main",
+          delete: true,
         });
 
         // Then try to create it again without adopt flag
@@ -124,6 +128,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
             parentBranch: "main",
             isProduction: false,
             adopt: false,
+            delete: true,
           }),
         ).rejects.toThrow("Branch");
 
@@ -201,6 +206,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           backupId: backup.id,
           clusterSize: "PS_10",
           isProduction: true,
+          delete: true,
         });
 
         expect(branch).toMatchObject({
@@ -254,6 +260,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
             parentBranch: "main",
             safeMigrations: true,
             isProduction: true,
+            delete: true,
           });
 
           expect(branch).toMatchObject({
@@ -279,6 +286,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
             safeMigrations: false,
             adopt: true,
             isProduction: true,
+            delete: true,
           });
 
           response = await api.getBranch({
@@ -310,6 +318,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           parentBranch: "main",
           isProduction: true,
           clusterSize: "PS_10",
+          delete: true,
         });
 
         expect(branch).toMatchObject({
@@ -334,6 +343,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           clusterSize: "PS_20",
           isProduction: true,
           adopt: true,
+          delete: true,
         });
 
         // Verify cluster size was updated
@@ -365,6 +375,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           database: database.name,
           parentBranch: "main",
           isProduction: false,
+          delete: true,
         });
 
         expect(parentBranch).toMatchObject({
@@ -379,6 +390,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           database: database.name,
           parentBranch, // Using Branch object instead of string
           isProduction: false,
+          delete: true,
         });
 
         expect(childBranch).toMatchObject({
