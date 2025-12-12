@@ -2,7 +2,6 @@ import { alchemy } from "../alchemy";
 import type { Context } from "../context";
 import { Resource } from "../resource";
 import { createPlanetScaleClient, type PlanetScaleProps } from "./api";
-import type { PostgresRole } from "./api/types.gen";
 import type { Branch } from "./branch";
 import type { Database } from "./database";
 import type { Role } from "./role";
@@ -27,6 +26,16 @@ export interface DefaultRoleProps extends PlanetScaleProps {
    * @default "main"
    */
   branch?: string | Branch;
+
+  /**
+   * Whether to force reset the default role if it already exists.
+   * This will delete the existing role and create a new one.
+   *
+   * Note: Adopting an existing role is not supported because the password is only returned after create.
+   *
+   * @default false
+   */
+  forceReset?: boolean;
 }
 
 export type DefaultRole = Omit<Role, "successor">;
@@ -35,7 +44,7 @@ export const DefaultRole = Resource(
   "planetscale::DefaultRole",
   async function (
     this: Context<DefaultRole, DefaultRoleProps>,
-    id: string,
+    _id: string,
     props: DefaultRoleProps,
   ): Promise<DefaultRole> {
     const api = createPlanetScaleClient(props);
@@ -58,40 +67,70 @@ export const DefaultRole = Resource(
         ? props.branch
         : (props.branch?.name ?? "main");
 
-    if (this.phase === "delete") {
-      return this.destroy();
-    }
-
-    const { data } = await api.getDefaultRole({
-      path: {
-        organization,
-        database,
-        branch,
-      },
-    });
-    return formatPostgresRole(data);
-
-    function formatPostgresRole(role: PostgresRole) {
-      return {
-        id: role.id,
-        name: role.name,
-        expiresAt: role.expires_at,
-        host: role.access_host_url,
-        username: role.username,
-        ttl: role.ttl,
-        password: alchemy.secret(role.password),
-        databaseName: role.database_name,
-        connectionUrl: alchemy.secret(
-          `postgresql://${role.username}:${role.password}@${role.access_host_url}:5432/${role.database_name}?sslmode=verify-full`,
-        ),
-        connectionUrlPooled: alchemy.secret(
-          `postgresql://${role.username}:${role.password}@${role.access_host_url}:6432/${role.database_name}?sslmode=verify-full`,
-        ),
-        inheritedRoles: role.inherited_roles,
-        database,
-        branch,
-        organization,
-      };
+    switch (this.phase) {
+      case "create": {
+        if (!props.forceReset) {
+          const existing = await api.getDefaultRole({
+            path: {
+              organization,
+              database,
+              branch,
+            },
+            throwOnError: false,
+          });
+          if (existing.data) {
+            throw new Error(
+              `Default role already exists for database "${database}" branch "${branch}". Use forceReset to reset the role.`,
+            );
+          } else if (existing.error && existing.response.status !== 404) {
+            throw new Error(
+              `Failed to check for default role in database "${database}" branch "${branch}".`,
+              {
+                cause: existing.error,
+              },
+            );
+          }
+        }
+        const { data } = await api.resetDefaultRole({
+          path: {
+            organization,
+            database,
+            branch,
+          },
+        });
+        return {
+          id: data.id,
+          name: data.name,
+          expiresAt: data.expires_at,
+          host: data.access_host_url,
+          username: data.username,
+          ttl: data.ttl,
+          password: alchemy.secret(data.password),
+          databaseName: data.database_name,
+          connectionUrl: alchemy.secret(
+            `postgresql://${data.username}:${data.password}@${data.access_host_url}:5432/${data.database_name}?sslmode=verify-full`,
+          ),
+          connectionUrlPooled: alchemy.secret(
+            `postgresql://${data.username}:${data.password}@${data.access_host_url}:6432/${data.database_name}?sslmode=verify-full`,
+          ),
+          inheritedRoles: data.inherited_roles,
+          database,
+          branch,
+          organization,
+        };
+      }
+      case "update": {
+        if (
+          database !== this.output.database ||
+          branch !== this.output.branch
+        ) {
+          return this.replace();
+        }
+        return this.output;
+      }
+      case "delete": {
+        return this.destroy();
+      }
     }
   },
 );
