@@ -8,29 +8,6 @@ export const patchMissingProperties: Patch = {
   // You can't add new endpoints here (hence the patchMissingEndpoints function),
   // but you can add missing properties to existing endpoints.
 
-  operations: {
-    "PATCH /organizations/{organization}/databases/{database}/branches/{branch}/changes":
-      (operation) => {
-        // @ts-expect-error
-        operation.parameters = [
-          ...(operation.parameters ?? []),
-          {
-            name: "body",
-            in: "body",
-            required: true,
-            schema: {
-              type: "object",
-              properties: {
-                cluster_size: {
-                  type: "string",
-                },
-              },
-              required: ["cluster_size"],
-            },
-          },
-        ];
-      },
-  },
   schemas: {
     DatabaseBranch: (schema) => {
       schema.properties = {
