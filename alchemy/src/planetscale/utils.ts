@@ -135,7 +135,7 @@ export async function ensureProductionBranchClusterSize(
       break;
     }
     case "postgresql": {
-      // Postgres databases must be resized first before promoting, otherwise 500 error
+      // Postgres databases do not need to be promoted; PS_DEV is development and all others are production
       await ensurePostgresClusterSize(
         api,
         organization,
@@ -143,7 +143,6 @@ export async function ensureProductionBranchClusterSize(
         branch,
         expectedClusterSize,
       );
-      await ensureProductionBranch(api, organization, database, branch);
       break;
     }
   }
