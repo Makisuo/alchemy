@@ -85,7 +85,7 @@ describe.skipIf(!process.env.PLANETSCALE_TEST).concurrent.each(kinds)(
           },
           clusterSize: "PS_10",
           allowDataBranching: true,
-          automaticMigrations: true,
+          automaticMigrations: kind === "mysql",
           requireApprovalForDeploy: false,
           restrictBranchRegion: true,
           insightsRawQueries: true,

@@ -56,7 +56,7 @@ interface BaseDatabaseProps extends PlanetScaleProps {
   allowDataBranching?: boolean;
 
   /**
-   * Whether to enable automatic migrations
+   * Whether to enable automatic migrations (Vitess only)
    */
   automaticMigrations?: boolean;
 
@@ -119,6 +119,7 @@ export type DatabaseProps = BaseDatabaseProps &
     | {
         kind: "postgresql";
         arch?: "x86" | "arm";
+        automaticMigrations?: false;
       }
   );
 
