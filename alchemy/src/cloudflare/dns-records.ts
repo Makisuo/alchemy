@@ -1,4 +1,4 @@
-import type { Context } from "../context.ts";
+import type { Context } from "../context";
 import type {
   DnsRecord as BaseDnsRecord,
   DnsRecordType,

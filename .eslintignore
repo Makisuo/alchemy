@@ -6,3 +6,5 @@ alchemy/src/aws/control/types.ts
 **/*.json
 **/*.html
 **/*.css
+examples/**
+alchemy/templates/**
