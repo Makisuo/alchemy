@@ -1,1 +1,8 @@
-**/*.ts
+**/lib/**
+**/node_modules
+alchemy/src/aws/control/types.ts
+**/*.js
+**/*.md
+**/*.json
+**/*.html
+**/*.css

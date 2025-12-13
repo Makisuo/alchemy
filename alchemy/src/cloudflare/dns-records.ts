@@ -308,7 +308,7 @@ async function createOrUpdateRecord(
             zoneId,
           );
         }
-      } catch (_err) {
+      } catch {
         // Fall through to the original error
       }
     }
