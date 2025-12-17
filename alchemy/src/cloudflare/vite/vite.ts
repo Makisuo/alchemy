@@ -52,9 +52,7 @@ export async function Vite<B extends Bindings>(
         ? { directory: props.assets }
         : {
             ...(props.assets ?? {}),
-            directory:
-              props.assets?.directory ??
-              (props.entrypoint || props.script ? "dist/client" : "dist"),
+            directory: props.assets?.directory ?? path.join("dist", "client"),
           },
     build: spreadBuildProps(props, `${runner} vite build`),
     dev: domain
