@@ -15,14 +15,14 @@ import {
   type CloudflareApiOptions,
 } from "./api.ts";
 import {
+  createAsyncProxy,
+  createBindingAsyncProxy,
+} from "./binding-async-proxy.ts";
+import {
   R2BucketCustomDomain,
   type R2BucketCustomDomainOptions,
 } from "./bucket-custom-domain.ts";
 import { deleteMiniflareBinding } from "./miniflare/delete.ts";
-import {
-  makeAsyncProxy,
-  makeAsyncProxyForBinding,
-} from "./miniflare/node-binding.ts";
 
 export type R2BucketJurisdiction = "default" | "eu" | "fedramp";
 
@@ -306,12 +306,10 @@ export type R2Objects = {
     }
 );
 
-export type R2Bucket = _R2Bucket & globalThis.R2Bucket;
-
 /**
  * Output returned after R2 Bucket creation/update
  */
-type _R2Bucket = Omit<
+export type R2Bucket = Omit<
   BucketProps,
   "delete" | "dev" | "domains" | "devDomain"
 > & {
@@ -391,7 +389,7 @@ type _R2Bucket = Omit<
      */
     host: string;
   };
-};
+} & globalThis.R2Bucket;
 
 export function isBucket(resource: any): resource is R2Bucket {
   return resource?.[ResourceKind] === "cloudflare::R2Bucket";
@@ -453,28 +451,12 @@ export async function R2Bucket(
     },
   });
 
-  return makeAsyncProxyForBinding({
-    apiOptions: props,
-    name: id,
-    binding: bucket as Omit<R2Bucket, keyof globalThis.R2Bucket>,
-    properties: {
-      createMultipartUpload: true,
-      delete: true,
-      get: true,
-      head: true,
-      list: true,
-      put: true,
-      resumeMultipartUpload: (promise) => (key: string, uploadId: string) =>
-        makeAsyncProxy(
-          { key, uploadId },
-          promise.then((bucket) => bucket.resumeMultipartUpload(key, uploadId)),
-          {
-            uploadPart: true,
-            abort: true,
-            complete: true,
-          },
-        ),
-    },
+  return createBindingAsyncProxy(id, props, bucket, {
+    resumeMultipartUpload: (promise) => (key, uploadId) =>
+      createAsyncProxy(
+        { key, uploadId },
+        promise.then((bucket) => bucket.resumeMultipartUpload(key, uploadId)),
+      ),
   });
 }
 
@@ -484,10 +466,10 @@ const parseDate = (headers: Headers) =>
 const _R2Bucket = Resource(
   "cloudflare::R2Bucket",
   async function (
-    this: Context<_R2Bucket>,
+    this: Context<R2Bucket>,
     id: string,
     props: BucketProps = {},
-  ): Promise<_R2Bucket> {
+  ): Promise<Omit<R2Bucket, keyof globalThis.R2Bucket>> {
     const bucketName =
       props.name ?? (this.output?.name || this.scope.createPhysicalName(id));
 
@@ -505,7 +487,7 @@ const _R2Bucket = Resource(
       id: this.output?.dev?.id ?? bucketName,
       remote: props.dev?.remote ?? false,
       isDeployed: this.output?.dev?.isDeployed || !isLocal,
-    } satisfies _R2Bucket["dev"];
+    } satisfies R2Bucket["dev"];
     const adopt = props.adopt ?? this.scope.adopt;
 
     async function createDomains(domain: NonNullable<BucketProps["domains"]>) {

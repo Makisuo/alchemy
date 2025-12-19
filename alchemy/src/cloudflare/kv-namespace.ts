@@ -13,8 +13,8 @@ import {
   type CloudflareApi,
   type CloudflareApiOptions,
 } from "./api.ts";
+import { createBindingAsyncProxy } from "./binding-async-proxy.ts";
 import { deleteMiniflareBinding } from "./miniflare/delete.ts";
-import { makeAsyncProxyForBinding } from "./miniflare/node-binding.ts";
 import { getDefaultPersistPath } from "./miniflare/paths.ts";
 
 /**
@@ -205,18 +205,7 @@ export async function KVNamespace(
     },
   });
 
-  return makeAsyncProxyForBinding({
-    apiOptions: props,
-    name: id,
-    binding: namespace,
-    properties: {
-      get: true,
-      list: true,
-      put: true,
-      getWithMetadata: true,
-      delete: true,
-    },
-  });
+  return createBindingAsyncProxy(id, props, namespace);
 }
 
 const _KVNamespace = Resource(

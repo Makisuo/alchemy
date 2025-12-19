@@ -7,7 +7,7 @@ import {
   type CloudflareApi,
   type CloudflareApiOptions,
 } from "./api.ts";
-import { makeAsyncProxyForBinding } from "./miniflare/node-binding.ts";
+import { createBindingAsyncProxy } from "./binding-async-proxy.ts";
 
 /**
  * Settings for a Cloudflare Queue
@@ -241,15 +241,7 @@ export async function Queue<T = unknown>(
       force: Scope.current.local,
     },
   });
-  return makeAsyncProxyForBinding({
-    apiOptions: props,
-    name: id,
-    binding: queue,
-    properties: {
-      send: true,
-      sendBatch: true,
-    },
-  });
+  return createBindingAsyncProxy(id, props, queue);
 }
 
 const _Queue = Resource("cloudflare::Queue", async function <

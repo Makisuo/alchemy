@@ -9,6 +9,7 @@ function isType(value: any): value is Type<any, any> {
   return (
     value &&
     typeof value === "object" &&
+    "toJsonSchema" in value &&
     typeof value.toJsonSchema === "function"
   );
 }

@@ -9,16 +9,16 @@ import {
   type CloudflareApi,
   type CloudflareApiOptions,
 } from "./api.ts";
+import {
+  createAsyncProxy,
+  createBindingAsyncProxy,
+} from "./binding-async-proxy.ts";
 import { cloneD1Database } from "./d1-clone.ts";
 import { importD1Database } from "./d1-import.ts";
 import { applyLocalD1Migrations } from "./d1-local-migrations.ts";
 import { applyMigrations } from "./d1-migrations.ts";
 import { listSqlFiles, readSqlFile, type D1SqlFile } from "./d1-sql-file.ts";
 import { deleteMiniflareBinding } from "./miniflare/delete.ts";
-import {
-  makeAsyncProxy,
-  makeAsyncProxyForBinding,
-} from "./miniflare/node-binding.ts";
 
 const DEFAULT_MIGRATIONS_TABLE = "d1_migrations";
 
@@ -283,55 +283,38 @@ export async function D1Database(
     },
   });
 
-  function makePreparedStatementProxy(
+  function preparedStatementProxy(
     promise: Promise<D1PreparedStatement>,
   ): D1PreparedStatement {
-    return makeAsyncProxy({}, promise, {
+    return createAsyncProxy({}, promise, {
       bind:
         (promise) =>
         (...args) =>
-          makePreparedStatementProxy(
+          preparedStatementProxy(
             promise.then((statement) => statement.bind(...args)),
           ),
-      first: true,
-      run: true,
-      all: true,
-      raw: true,
     });
   }
 
-  return makeAsyncProxyForBinding({
-    apiOptions: props,
-    name: id,
-    binding: database,
-    properties: {
-      prepare: (promise) => (query) =>
-        makePreparedStatementProxy(
-          promise.then((database) => database.prepare(query)),
-        ),
-      batch: true,
-      exec: true,
-      withSession: (promise) => (constraintOrBookmark) =>
-        makeAsyncProxy(
-          {},
-          promise.then((database) =>
-            database.withSession(constraintOrBookmark),
-          ),
-          {
-            prepare: (session) => (query) =>
-              makePreparedStatementProxy(
-                session.then((session) => session.prepare(query)),
-              ),
-            batch: true,
-            getBookmark: () => () => {
-              throw new Error(
-                "D1DatabaseSession.getBookmark is not implemented",
-              );
-            },
+  return createBindingAsyncProxy(id, props, database, {
+    prepare: (promise) => (query) =>
+      preparedStatementProxy(
+        promise.then((database) => database.prepare(query)),
+      ),
+    withSession: (promise) => (constraintOrBookmark) =>
+      createAsyncProxy(
+        {},
+        promise.then((database) => database.withSession(constraintOrBookmark)),
+        {
+          prepare: (promise) => (query) =>
+            preparedStatementProxy(
+              promise.then((session) => session.prepare(query)),
+            ),
+          getBookmark: () => () => {
+            return constraintOrBookmark ?? null;
           },
-        ),
-      dump: true,
-    },
+        },
+      ),
   });
 }
 
