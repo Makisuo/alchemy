@@ -1,4 +1,3 @@
-import type { R2PutOptions } from "@cloudflare/workers-types/experimental/index.ts";
 import { isDeepStrictEqual } from "node:util";
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
