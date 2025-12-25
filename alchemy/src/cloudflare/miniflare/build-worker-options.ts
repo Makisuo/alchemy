@@ -69,53 +69,11 @@ export const buildWorkerOptions = async (
   watch: (signal: AbortSignal) => AsyncGenerator<miniflare.WorkerOptions>;
   remoteProxy: HTTPServer | undefined;
 }> => {
-  const baseOptions: Partial<BaseWorkerOptions> = {
+  const remoteBindings: RemoteBinding[] = [];
+  const options: Partial<BaseWorkerOptions> = {
     name: input.name,
     compatibilityDate: input.compatibilityDate,
     compatibilityFlags: input.compatibilityFlags,
-    // This exposes the worker as a route that can be accessed by setting the MF-Route-Override header.
-    routes: [input.name],
-  };
-  const port = input.port ?? (await reservePort(input.name));
-  const { options: bindingsOptions, remoteProxy } = await buildBindings({
-    api: input.api,
-    name: input.name,
-    bindings: input.bindings ?? {},
-    eventSources: input.eventSources ?? [],
-    assets: input.assets,
-    port,
-    cwd: input.cwd,
-  });
-  async function* watch(signal: AbortSignal) {
-    for await (const bundle of input.bundle.watch(signal)) {
-      const { modules, rootPath } = normalizeBundle(bundle);
-      yield {
-        ...baseOptions,
-        ...bindingsOptions,
-        modules,
-        rootPath,
-      };
-    }
-  }
-  return {
-    watch,
-    remoteProxy,
-  };
-};
-
-export async function buildBindings(input: {
-  api: CloudflareApi;
-  name: string;
-  bindings: Bindings;
-  eventSources: EventSource[] | undefined;
-  assets?: AssetsConfig;
-  port: number;
-  cwd: string;
-}): Promise<{
-  options: Partial<BaseWorkerOptions>;
-  remoteProxy: HTTPServer | undefined;
-}> {
-  const options: Partial<BaseWorkerOptions> = {
     unsafeDirectSockets: [
       // This matches the Wrangler configuration by exposing the default handler (e.g. `export default { fetch }`).
       {
@@ -123,8 +81,10 @@ export async function buildBindings(input: {
         proxy: true,
       },
     ],
+    // This exposes the worker as a route that can be accessed by setting the MF-Route-Override header.
+    routes: [input.name],
   };
-  const remoteBindings: RemoteBinding[] = [];
+  const port = input.port ?? (await reservePort(input.name));
   for (const [key, binding] of Object.entries(input.bindings ?? {})) {
     if (typeof binding === "string") {
       (options.bindings ??= {})[key] = binding;
@@ -135,11 +95,11 @@ export async function buildBindings(input: {
       continue;
     }
     if (binding.type === "cloudflare::Worker::DevDomain") {
-      (options.bindings ??= {})[key] = `localhost:${input.port}`;
+      (options.bindings ??= {})[key] = `localhost:${port}`;
       continue;
     }
     if (binding.type === "cloudflare::Worker::DevUrl") {
-      (options.bindings ??= {})[key] = `http://localhost:${input.port}`;
+      (options.bindings ??= {})[key] = `http://localhost:${port}`;
       continue;
     }
     switch (binding.type) {
@@ -403,6 +363,16 @@ export async function buildBindings(input: {
       (options.queueConsumers ??= {})[eventSource.name] = {};
     }
   }
+  async function* watch(signal: AbortSignal) {
+    for await (const bundle of input.bundle.watch(signal)) {
+      const { modules, rootPath } = normalizeBundle(bundle);
+      yield {
+        ...options,
+        modules,
+        rootPath,
+      };
+    }
+  }
   if (remoteBindings.length > 0) {
     const remoteProxy = await createRemoteProxyWorker({
       api: input.api,
@@ -483,15 +453,15 @@ export async function buildBindings(input: {
       }
     }
     return {
-      options,
+      watch,
       remoteProxy: remoteProxy.server,
     };
   }
   return {
-    options,
+    watch,
     remoteProxy: undefined,
   };
-}
+};
 
 const moduleTypes = {
   esm: "ESModule",
