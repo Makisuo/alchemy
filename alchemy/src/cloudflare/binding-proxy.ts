@@ -19,6 +19,40 @@ type MiniflareOptions = Extract<
   { script: string; modules?: boolean }
 >;
 
+type InvalidType<T extends string> = T & { __brand: "invalid" };
+
+export function createMiniflareBindingProxy<B extends Extract<Binding, object>>(
+  id: string,
+  props: CloudflareApiOptions & { dev?: { remote?: boolean } },
+  target: Omit<B, keyof Bound<B>>,
+  config: {
+    remoteBindingSpec: WorkerBindingSpec;
+    miniflareOptions: (
+      maybeRemoteProxyConnectionString:
+        | mf.RemoteProxyConnectionString
+        | undefined,
+    ) => Partial<MiniflareOptions>;
+    interceptors?: undefined;
+  },
+): Interceptors<Bound<B>> extends Record<string, never>
+  ? B
+  : InvalidType<"Binding includes synchronous values that require interceptors">;
+
+export function createMiniflareBindingProxy<B extends Extract<Binding, object>>(
+  id: string,
+  props: CloudflareApiOptions & { dev?: { remote?: boolean } },
+  target: Omit<B, keyof Bound<B>>,
+  config: {
+    remoteBindingSpec: WorkerBindingSpec;
+    miniflareOptions: (
+      maybeRemoteProxyConnectionString:
+        | mf.RemoteProxyConnectionString
+        | undefined,
+    ) => Partial<MiniflareOptions>;
+    interceptors: Interceptors<Bound<B>>;
+  },
+): B;
+
 /**
  * @param id - Resource ID
  * @param props - Resource input props
