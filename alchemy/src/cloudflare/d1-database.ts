@@ -9,6 +9,10 @@ import {
   type CloudflareApi,
   type CloudflareApiOptions,
 } from "./api.ts";
+import {
+  createAsyncProxy,
+  createMiniflareBindingProxy,
+} from "./binding-proxy.ts";
 import { cloneD1Database } from "./d1-clone.ts";
 import { importD1Database } from "./d1-import.ts";
 import { applyLocalD1Migrations } from "./d1-local-migrations.ts";
@@ -174,7 +178,7 @@ export type D1Database = Pick<
    * The jurisdiction of the database
    */
   jurisdiction: D1DatabaseJurisdiction;
-};
+} & globalThis.D1Database;
 
 /**
  * Creates and manages Cloudflare D1 Databases.
@@ -267,7 +271,7 @@ export async function D1Database(
       : [],
   ]);
 
-  return _D1Database(id, {
+  const database = await _D1Database(id, {
     ...props,
     migrationsFiles,
     importFiles,
@@ -276,6 +280,58 @@ export async function D1Database(
       // force local migrations to run even if the database was already deployed live
       // this property will oscillate from true to false depending on the dev vs live deployment
       force: Scope.current.local,
+    },
+  });
+  function preparedStatementProxy(
+    promise: Promise<D1PreparedStatement>,
+  ): D1PreparedStatement {
+    return createAsyncProxy({}, promise, {
+      bind:
+        (promise) =>
+        (...args) =>
+          preparedStatementProxy(
+            promise.then((statement) => statement.bind(...args)),
+          ),
+    });
+  }
+  return createMiniflareBindingProxy(id, props, database, {
+    remoteBindingSpec: {
+      type: "d1",
+      name: "D1",
+      id: database.id,
+    },
+    miniflareOptions: (maybeRemoteProxyConnectionString) => ({
+      d1Databases: {
+        D1: maybeRemoteProxyConnectionString
+          ? {
+              id: database.id,
+              remoteProxyConnectionString: maybeRemoteProxyConnectionString,
+            }
+          : { id: database.dev.id },
+      },
+      d1Persist: true,
+    }),
+    interceptors: {
+      prepare: (promise) => (query) =>
+        preparedStatementProxy(
+          promise.then((database) => database.prepare(query)),
+        ),
+      withSession: (promise) => (constraintOrBookmark) =>
+        createAsyncProxy(
+          {},
+          promise.then((database) =>
+            database.withSession(constraintOrBookmark),
+          ),
+          {
+            prepare: (promise) => (query) =>
+              preparedStatementProxy(
+                promise.then((session) => session.prepare(query)),
+              ),
+            getBookmark: () => () => {
+              return constraintOrBookmark ?? null;
+            },
+          },
+        ),
     },
   });
 }
@@ -289,7 +345,7 @@ const _D1Database = Resource(
       migrationsFiles: D1SqlFile[] | undefined;
       importFiles: D1SqlFile[] | undefined;
     },
-  ): Promise<D1Database> {
+  ): Promise<Omit<D1Database, keyof globalThis.D1Database>> {
     const databaseName =
       props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
     const jurisdiction = props.jurisdiction ?? "default";

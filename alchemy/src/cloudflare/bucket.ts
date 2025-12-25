@@ -1,10 +1,7 @@
-import type { R2PutOptions } from "@cloudflare/workers-types/experimental/index.ts";
-import * as mf from "miniflare";
 import { isDeepStrictEqual } from "node:util";
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { Scope } from "../scope.ts";
-import { streamToBuffer } from "../serde.ts";
 import { isRetryableError } from "../state/r2-rest-state-store.ts";
 import { withExponentialBackoff } from "../util/retry.ts";
 import { CloudflareApiError, handleApiError } from "./api-error.ts";
@@ -18,11 +15,14 @@ import {
   type CloudflareApiOptions,
 } from "./api.ts";
 import {
+  createAsyncProxy,
+  createMiniflareBindingProxy,
+} from "./binding-proxy.ts";
+import {
   R2BucketCustomDomain,
   type R2BucketCustomDomainOptions,
 } from "./bucket-custom-domain.ts";
 import { deleteMiniflareBinding } from "./miniflare/delete.ts";
-import { getDefaultPersistPath } from "./miniflare/paths.ts";
 
 export type R2BucketJurisdiction = "default" | "eu" | "fedramp";
 
@@ -306,28 +306,10 @@ export type R2Objects = {
     }
 );
 
-export type R2Bucket = _R2Bucket & {
-  head(key: string): Promise<R2ObjectMetadata | null>;
-  get(key: string): Promise<R2ObjectContent | null>;
-  put(
-    key: string,
-    value:
-      | ReadableStream
-      | ArrayBuffer
-      | ArrayBufferView
-      | string
-      | null
-      | Blob,
-    options?: Pick<R2PutOptions, "httpMetadata">,
-  ): Promise<PutR2ObjectResponse>;
-  delete(key: string): Promise<Response>;
-  list(options?: R2ListOptions): Promise<R2Objects>;
-};
-
 /**
  * Output returned after R2 Bucket creation/update
  */
-type _R2Bucket = Omit<
+export type R2Bucket = Omit<
   BucketProps,
   "delete" | "dev" | "domains" | "devDomain"
 > & {
@@ -407,7 +389,7 @@ type _R2Bucket = Omit<
      */
     host: string;
   };
-};
+} & globalThis.R2Bucket;
 
 export function isBucket(resource: any): resource is R2Bucket {
   return resource?.[ResourceKind] === "cloudflare::R2Bucket";
@@ -461,9 +443,6 @@ export async function R2Bucket(
   id: string,
   props: BucketProps = {},
 ): Promise<R2Bucket> {
-  const scope = Scope.current;
-  const isLocal = scope.local && props.dev?.remote !== true;
-  const api = await createCloudflareApi(props);
   const bucket = await _R2Bucket(id, {
     ...props,
     dev: {
@@ -471,144 +450,33 @@ export async function R2Bucket(
       force: Scope.current.local,
     },
   });
-
-  let _miniflare: mf.Miniflare | undefined;
-  const miniflare = () => {
-    if (_miniflare) {
-      return _miniflare;
-    }
-    _miniflare = new mf.Miniflare({
-      script: "",
-      modules: true,
-      defaultPersistRoot: getDefaultPersistPath(scope.rootDir),
-      r2Buckets: [bucket.dev.id],
-      log: process.env.DEBUG ? new mf.Log(mf.LogLevel.DEBUG) : undefined,
-    });
-    scope.onCleanup(async () => _miniflare?.dispose());
-    return _miniflare;
-  };
-  const localBucket = () => miniflare().getR2Bucket(bucket.dev.id);
-
-  return {
-    ...bucket,
-    head: async (key: string) => {
-      if (isLocal) {
-        const result = await (await localBucket()).head(key);
-        if (result) {
-          return {
-            key: result.key,
-            etag: result.etag,
-            uploaded: result.uploaded,
-            size: result.size,
-            httpMetadata: result.httpMetadata,
-          } as R2ObjectMetadata;
-        }
-        return null;
-      }
-      return headObject(api, {
-        bucketName: bucket.name,
-        key,
-      });
+  return createMiniflareBindingProxy(id, props, bucket, {
+    remoteBindingSpec: {
+      type: "r2_bucket",
+      name: "R2",
+      bucket_name: bucket.name,
+      jurisdiction:
+        bucket.jurisdiction !== "default" ? bucket.jurisdiction : undefined,
     },
-    get: async (key: string) => {
-      if (isLocal) {
-        const result = await (await localBucket()).get(key);
-        if (result) {
-          // cast because workers vs node built-ins
-          return result as unknown as R2ObjectContent;
-        }
-        return null;
-      }
-      const response = await getObject(api, {
-        bucketName: bucket.name,
-        key,
-      });
-      if (response.ok) {
-        return parseR2Object(key, response);
-      } else if (response.status === 404) {
-        return null;
-      } else {
-        throw await handleApiError(response, "get", "object", key);
-      }
+    miniflareOptions: (maybeRemoteProxyConnectionString) => ({
+      r2Buckets: {
+        R2: maybeRemoteProxyConnectionString
+          ? {
+              id: bucket.name,
+              remoteProxyConnectionString: maybeRemoteProxyConnectionString,
+            }
+          : { id: bucket.dev.id },
+      },
+    }),
+    interceptors: {
+      resumeMultipartUpload: (promise) => (key, uploadId) =>
+        createAsyncProxy(
+          { key, uploadId },
+          promise.then((bucket) => bucket.resumeMultipartUpload(key, uploadId)),
+        ),
     },
-    list: async (options?: R2ListOptions): Promise<R2Objects> => {
-      if (isLocal) {
-        return (await localBucket()).list(options);
-      }
-      return listObjects(api, bucket.name, {
-        ...options,
-        jurisdiction: bucket.jurisdiction,
-      });
-    },
-    put: async (
-      key: string,
-      value: PutObjectObject,
-      options?: Pick<R2PutOptions, "httpMetadata">,
-    ): Promise<PutR2ObjectResponse> => {
-      if (isLocal) {
-        return await (await localBucket()).put(
-          key,
-          typeof value === "string"
-            ? value
-            : Buffer.isBuffer(value) ||
-                value instanceof Uint8Array ||
-                value instanceof ArrayBuffer
-              ? new Uint8Array(value)
-              : value instanceof Blob
-                ? new Uint8Array(await value.arrayBuffer())
-                : value instanceof ReadableStream
-                  ? new Uint8Array(await streamToBuffer(value))
-                  : value,
-          options,
-        );
-      }
-      const response = await putObject(api, {
-        bucketName: bucket.name,
-        key: key,
-        object: value,
-        options: options,
-      });
-      const body = (await response.json()) as {
-        result: {
-          key: string;
-          etag: string;
-          uploaded: string;
-          version: string;
-          size: string;
-        };
-      };
-      return {
-        key: body.result.key,
-        etag: body.result.etag,
-        uploaded: new Date(body.result.uploaded),
-        version: body.result.version,
-        size: Number(body.result.size),
-      };
-    },
-    delete: async (key: string) => {
-      if (isLocal) {
-        await (await localBucket()).delete(key);
-      }
-      return deleteObject(api, {
-        bucketName: bucket.name,
-        key: key,
-      });
-    },
-  };
+  });
 }
-
-const parseR2Object = (key: string, response: Response): R2ObjectContent => ({
-  etag: response.headers.get("ETag")!,
-  uploaded: parseDate(response.headers),
-  key,
-  size: Number(response.headers.get("Content-Length")),
-  httpMetadata: mapHeadersToHttpMetadata(response.headers),
-  arrayBuffer: () => response.arrayBuffer(),
-  bytes: () => response.bytes(),
-  text: () => response.text(),
-  json: () => response.json(),
-  blob: () => response.blob(),
-});
 
 const parseDate = (headers: Headers) =>
   new Date(headers.get("Last-Modified") ?? headers.get("Date")!);
@@ -616,10 +484,10 @@ const parseDate = (headers: Headers) =>
 const _R2Bucket = Resource(
   "cloudflare::R2Bucket",
   async function (
-    this: Context<_R2Bucket>,
+    this: Context<R2Bucket>,
     id: string,
     props: BucketProps = {},
-  ): Promise<_R2Bucket> {
+  ): Promise<Omit<R2Bucket, keyof globalThis.R2Bucket>> {
     const bucketName =
       props.name ?? (this.output?.name || this.scope.createPhysicalName(id));
 
@@ -637,7 +505,7 @@ const _R2Bucket = Resource(
       id: this.output?.dev?.id ?? bucketName,
       remote: props.dev?.remote ?? false,
       isDeployed: this.output?.dev?.isDeployed || !isLocal,
-    } satisfies _R2Bucket["dev"];
+    } satisfies R2Bucket["dev"];
     const adopt = props.adopt ?? this.scope.adopt;
 
     async function createDomains(domain: NonNullable<BucketProps["domains"]>) {

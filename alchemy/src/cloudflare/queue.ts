@@ -7,6 +7,7 @@ import {
   type CloudflareApi,
   type CloudflareApiOptions,
 } from "./api.ts";
+import { createMiniflareBindingProxy } from "./binding-proxy.ts";
 
 /**
  * Settings for a Cloudflare Queue
@@ -148,7 +149,7 @@ export type Queue<Body = unknown> = Omit<QueueProps, "dev"> & {
      */
     remote: boolean;
   };
-};
+} & globalThis.Queue<Body>;
 
 /**
  * Creates and manages Cloudflare Queues.
@@ -233,19 +234,35 @@ export async function Queue<T = unknown>(
   id: string,
   props: QueueProps = {},
 ): Promise<Queue<T>> {
-  return await _Queue(id, {
+  const queue = await _Queue<T>(id, {
     ...props,
     dev: {
       ...(props.dev ?? {}),
       force: Scope.current.local,
     },
   });
+  return createMiniflareBindingProxy(id, props, queue, {
+    remoteBindingSpec: {
+      type: "queue",
+      name: "BINDING",
+      queue_name: queue.name,
+    },
+    miniflareOptions: (maybeRemoteProxyConnectionString) => ({
+      queueProducers: {
+        BINDING: {
+          queueName: queue.name,
+          deliveryDelay: props.settings?.deliveryDelay,
+          remoteProxyConnectionString: maybeRemoteProxyConnectionString,
+        },
+      },
+    }),
+  });
 }
 
 const _Queue = Resource("cloudflare::Queue", async function <
   T = unknown,
 >(this: Context<Queue<T>>, id: string, props: QueueProps = {}): Promise<
-  Queue<T>
+  Omit<Queue<T>, keyof globalThis.Queue<T>>
 > {
   const queueName =
     props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);

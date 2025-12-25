@@ -1,3 +1,4 @@
+import * as mf from "miniflare";
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { Scope } from "../scope.ts";
@@ -12,8 +13,8 @@ import {
   type CloudflareApi,
   type CloudflareApiOptions,
 } from "./api.ts";
+import { createMiniflareBindingProxy } from "./binding-proxy.ts";
 import { deleteMiniflareBinding } from "./miniflare/delete.ts";
-import * as mf from "miniflare";
 import { getDefaultPersistPath } from "./miniflare/paths.ts";
 
 /**
@@ -136,7 +137,7 @@ export type KVNamespace = Omit<KVNamespaceProps, "delete" | "dev"> & {
      */
     remote: boolean;
   };
-};
+} & globalThis.KVNamespace;
 
 /**
  * A Cloudflare KV Namespace is a key-value store that can be used to store data for your application.
@@ -196,12 +197,30 @@ export async function KVNamespace(
   id: string,
   props: KVNamespaceProps = {},
 ): Promise<KVNamespace> {
-  return await _KVNamespace(id, {
+  const namespace = await _KVNamespace(id, {
     ...props,
     dev: {
       ...(props.dev ?? {}),
       force: Scope.current.local,
     },
+  });
+  return createMiniflareBindingProxy(id, props, namespace, {
+    remoteBindingSpec: {
+      type: "kv_namespace",
+      name: "KV",
+      namespace_id: namespace.namespaceId,
+    },
+    miniflareOptions: (maybeRemoteProxyConnectionString) => ({
+      kvNamespaces: {
+        KV: maybeRemoteProxyConnectionString
+          ? {
+              id: namespace.namespaceId,
+              remoteProxyConnectionString: maybeRemoteProxyConnectionString,
+            }
+          : { id: namespace.dev.id },
+      },
+      kvPersist: true,
+    }),
   });
 }
 
@@ -211,7 +230,7 @@ const _KVNamespace = Resource(
     this: Context<KVNamespace>,
     id: string,
     props: KVNamespaceProps,
-  ): Promise<KVNamespace> {
+  ): Promise<Omit<KVNamespace, keyof globalThis.KVNamespace>> {
     const title =
       props.title ?? this.output?.title ?? this.scope.createPhysicalName(id);
 
