@@ -7,7 +7,7 @@ import {
   type CloudflareApi,
   type CloudflareApiOptions,
 } from "./api.ts";
-import { createBindingAsyncProxy } from "./binding-async-proxy.ts";
+import { createMiniflareBindingProxy } from "./binding-proxy.ts";
 
 /**
  * Settings for a Cloudflare Queue
@@ -241,13 +241,28 @@ export async function Queue<T = unknown>(
       force: Scope.current.local,
     },
   });
-  return createBindingAsyncProxy(id, props, queue);
+  return createMiniflareBindingProxy(id, props, queue, {
+    remoteBindingSpec: {
+      type: "queue",
+      name: "BINDING",
+      queue_name: queue.name,
+    },
+    miniflareOptions: (maybeRemoteProxyConnectionString) => ({
+      queueProducers: {
+        BINDING: {
+          queueName: queue.name,
+          deliveryDelay: props.settings?.deliveryDelay,
+          remoteProxyConnectionString: maybeRemoteProxyConnectionString,
+        },
+      },
+    }),
+  });
 }
 
 const _Queue = Resource("cloudflare::Queue", async function <
   T = unknown,
 >(this: Context<Queue<T>>, id: string, props: QueueProps = {}): Promise<
-  Omit<Queue<T>, keyof globalThis.Queue>
+  Omit<Queue<T>, keyof globalThis.Queue<T>>
 > {
   const queueName =
     props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);

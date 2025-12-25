@@ -13,7 +13,7 @@ import {
   type CloudflareApi,
   type CloudflareApiOptions,
 } from "./api.ts";
-import { createBindingAsyncProxy } from "./binding-async-proxy.ts";
+import { createMiniflareBindingProxy } from "./binding-proxy.ts";
 import { deleteMiniflareBinding } from "./miniflare/delete.ts";
 import { getDefaultPersistPath } from "./miniflare/paths.ts";
 
@@ -204,8 +204,24 @@ export async function KVNamespace(
       force: Scope.current.local,
     },
   });
-
-  return createBindingAsyncProxy(id, props, namespace);
+  return createMiniflareBindingProxy(id, props, namespace, {
+    remoteBindingSpec: {
+      type: "kv_namespace",
+      name: "KV",
+      namespace_id: namespace.namespaceId,
+    },
+    miniflareOptions: (maybeRemoteProxyConnectionString) => ({
+      kvNamespaces: {
+        KV: maybeRemoteProxyConnectionString
+          ? {
+              id: namespace.namespaceId,
+              remoteProxyConnectionString: maybeRemoteProxyConnectionString,
+            }
+          : { id: namespace.dev.id },
+      },
+      kvPersist: true,
+    }),
+  });
 }
 
 const _KVNamespace = Resource(

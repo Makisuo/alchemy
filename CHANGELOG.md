@@ -1,3 +1,19 @@
+## v0.82.1
+
+### &nbsp;&nbsp;&nbsp;🚀 Features
+
+- **cloudflare**: D1 import &nbsp;-&nbsp; by **John Royal** in https://github.com/alchemy-run/alchemy/issues/1254 [<samp>(7ba2b)</samp>](https://github.com/alchemy-run/alchemy/commit/7ba2b622)
+
+### &nbsp;&nbsp;&nbsp;🐞 Bug Fixes
+
+- **cloudflare**:
+  - D1 database create error due to malformed request &nbsp;-&nbsp; by **John Royal** in https://github.com/alchemy-run/alchemy/issues/1278 [<samp>(dc93d)</samp>](https://github.com/alchemy-run/alchemy/commit/dc93d6d8)
+  - D1 local migrations fail with "column already exists" &nbsp;-&nbsp; by **John Royal** in https://github.com/alchemy-run/alchemy/issues/1279 [<samp>(e6021)</samp>](https://github.com/alchemy-run/alchemy/commit/e6021096)
+
+##### &nbsp;&nbsp;&nbsp;&nbsp;[View changes on GitHub](https://github.com/alchemy-run/alchemy/compare/v0.82.0...v0.82.1)
+
+---
+
 ## v0.82.0
 
 ### &nbsp;&nbsp;&nbsp;🚀 Features

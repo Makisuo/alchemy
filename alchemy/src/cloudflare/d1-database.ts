@@ -11,8 +11,8 @@ import {
 } from "./api.ts";
 import {
   createAsyncProxy,
-  createBindingAsyncProxy,
-} from "./binding-async-proxy.ts";
+  createMiniflareBindingProxy,
+} from "./binding-proxy.ts";
 import { cloneD1Database } from "./d1-clone.ts";
 import { importD1Database } from "./d1-import.ts";
 import { applyLocalD1Migrations } from "./d1-local-migrations.ts";
@@ -282,7 +282,6 @@ export async function D1Database(
       force: Scope.current.local,
     },
   });
-
   function preparedStatementProxy(
     promise: Promise<D1PreparedStatement>,
   ): D1PreparedStatement {
@@ -295,26 +294,45 @@ export async function D1Database(
           ),
     });
   }
-
-  return createBindingAsyncProxy(id, props, database, {
-    prepare: (promise) => (query) =>
-      preparedStatementProxy(
-        promise.then((database) => database.prepare(query)),
-      ),
-    withSession: (promise) => (constraintOrBookmark) =>
-      createAsyncProxy(
-        {},
-        promise.then((database) => database.withSession(constraintOrBookmark)),
-        {
-          prepare: (promise) => (query) =>
-            preparedStatementProxy(
-              promise.then((session) => session.prepare(query)),
-            ),
-          getBookmark: () => () => {
-            return constraintOrBookmark ?? null;
+  return createMiniflareBindingProxy(id, props, database, {
+    remoteBindingSpec: {
+      type: "d1",
+      name: "D1",
+      id: database.id,
+    },
+    miniflareOptions: (maybeRemoteProxyConnectionString) => ({
+      d1Databases: {
+        D1: maybeRemoteProxyConnectionString
+          ? {
+              id: database.id,
+              remoteProxyConnectionString: maybeRemoteProxyConnectionString,
+            }
+          : { id: database.dev.id },
+      },
+      d1Persist: true,
+    }),
+    interceptors: {
+      prepare: (promise) => (query) =>
+        preparedStatementProxy(
+          promise.then((database) => database.prepare(query)),
+        ),
+      withSession: (promise) => (constraintOrBookmark) =>
+        createAsyncProxy(
+          {},
+          promise.then((database) =>
+            database.withSession(constraintOrBookmark),
+          ),
+          {
+            prepare: (promise) => (query) =>
+              preparedStatementProxy(
+                promise.then((session) => session.prepare(query)),
+              ),
+            getBookmark: () => () => {
+              return constraintOrBookmark ?? null;
+            },
           },
-        },
-      ),
+        ),
+    },
   });
 }
 
@@ -338,7 +356,7 @@ const _D1Database = Resource(
 
     const local = this.scope.local && !props.dev?.remote;
     const dev = {
-      id: this.output?.dev?.id ?? this.output?.id ?? id,
+      id: this.output?.dev?.id ?? this.output?.id ?? databaseName,
       remote: props.dev?.remote ?? false,
     };
     const adopt = props.adopt ?? this.scope.adopt;

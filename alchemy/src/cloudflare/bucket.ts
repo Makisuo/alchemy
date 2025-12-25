@@ -16,8 +16,8 @@ import {
 } from "./api.ts";
 import {
   createAsyncProxy,
-  createBindingAsyncProxy,
-} from "./binding-async-proxy.ts";
+  createMiniflareBindingProxy,
+} from "./binding-proxy.ts";
 import {
   R2BucketCustomDomain,
   type R2BucketCustomDomainOptions,
@@ -450,13 +450,31 @@ export async function R2Bucket(
       force: Scope.current.local,
     },
   });
-
-  return createBindingAsyncProxy(id, props, bucket, {
-    resumeMultipartUpload: (promise) => (key, uploadId) =>
-      createAsyncProxy(
-        { key, uploadId },
-        promise.then((bucket) => bucket.resumeMultipartUpload(key, uploadId)),
-      ),
+  return createMiniflareBindingProxy(id, props, bucket, {
+    remoteBindingSpec: {
+      type: "r2_bucket",
+      name: "R2",
+      bucket_name: bucket.name,
+      jurisdiction:
+        bucket.jurisdiction !== "default" ? bucket.jurisdiction : undefined,
+    },
+    miniflareOptions: (maybeRemoteProxyConnectionString) => ({
+      r2Buckets: {
+        R2: maybeRemoteProxyConnectionString
+          ? {
+              id: bucket.name,
+              remoteProxyConnectionString: maybeRemoteProxyConnectionString,
+            }
+          : { id: bucket.dev.id },
+      },
+    }),
+    interceptors: {
+      resumeMultipartUpload: (promise) => (key, uploadId) =>
+        createAsyncProxy(
+          { key, uploadId },
+          promise.then((bucket) => bucket.resumeMultipartUpload(key, uploadId)),
+        ),
+    },
   });
 }
 
@@ -993,9 +1011,7 @@ export async function putBucketLifecycleRules(
     api.put(
       `/accounts/${api.accountId}/r2/buckets/${bucketName}/lifecycle`,
       rulesBody,
-      {
-        headers: withJurisdiction(props),
-      },
+      { headers: withJurisdiction(props) },
     ),
   );
 }
@@ -1010,9 +1026,7 @@ export async function getBucketLifecycleRules(
 ): Promise<R2BucketLifecycleRule[]> {
   const res = await api.get(
     `/accounts/${api.accountId}/r2/buckets/${bucketName}/lifecycle`,
-    {
-      headers: withJurisdiction(props),
-    },
+    { headers: withJurisdiction(props) },
   );
   const json: any = await res.json();
   if (!json?.success) {
@@ -1050,9 +1064,7 @@ export async function putBucketLockRules(
     api.put(
       `/accounts/${api.accountId}/r2/buckets/${bucketName}/lock`,
       rulesBody,
-      {
-        headers: withJurisdiction(props),
-      },
+      { headers: withJurisdiction(props) },
     ),
   );
 }
@@ -1067,9 +1079,7 @@ export async function getBucketLockRules(
 ): Promise<R2BucketLockRule[]> {
   const res = await api.get(
     `/accounts/${api.accountId}/r2/buckets/${bucketName}/lock`,
-    {
-      headers: withJurisdiction(props),
-    },
+    { headers: withJurisdiction(props) },
   );
   const json: any = await res.json();
   if (!json?.success) {
