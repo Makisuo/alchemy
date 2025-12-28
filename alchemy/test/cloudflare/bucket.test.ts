@@ -434,8 +434,8 @@ describe("R2 Bucket Resource", async () => {
     }
   });
 
-  test("bucket operations head, get, put, and delete objects", async (scope) => {
-    const bucketName = `${BRANCH_PREFIX.toLowerCase()}-test-bucket-ops`;
+  test.only("bucket operations head, get, put, and delete objects", async (scope) => {
+    const bucketName = `${BRANCH_PREFIX.toLowerCase()}-test-bucket-ops-1`;
     let bucket: R2Bucket | undefined;
 
     try {
@@ -450,22 +450,35 @@ describe("R2 Bucket Resource", async () => {
       const testKey = "test-object.txt";
       const testContent = "Hello, R2 Bucket Operations!";
       const updatedContent = "Updated content for testing";
+      console.log("1. delete object", testKey);
       await bucket.delete(testKey);
+
+      console.log("2. put object", testKey);
       // TODO(john): this is a problem with @cloudflare/workers-types, it should not be nullable unless options.onlyIf is used
       let putObj = (await bucket.put(testKey, testContent)) as R2Object;
       expect(putObj.size).toBeTypeOf("number");
       expect(putObj.size).toEqual(testContent.length);
+
+      console.log("3. head object", testKey);
       let obj = await bucket.head(testKey);
       expect(obj).toBeDefined();
       expect(obj?.etag).toEqual(putObj.etag);
       expect(obj?.size).toEqual(putObj.size);
+
+      console.log("4. put object", testKey);
       putObj = (await bucket.put(testKey, updatedContent)) as R2Object;
+
+      console.log("5. head object", testKey);
       obj = await bucket.head(testKey);
       expect(obj?.etag).toEqual(putObj.etag);
+      console.log("6. get object", testKey);
       const getObj = await bucket.get(testKey);
+      console.log("7. get object text", testKey);
       await expect(getObj?.text()).resolves.toEqual(updatedContent);
 
+      console.log("8. list objects");
       const listObj = await bucket.list();
+      console.log("9. list objects", listObj);
 
       // console.log(JSON.stringify(listObj, null, 2));
       expect(listObj.objects.length).toEqual(1);
@@ -480,14 +493,19 @@ describe("R2 Bucket Resource", async () => {
         },
       ]);
 
+      console.log("10. delete object", testKey);
       await bucket.delete(testKey);
+      console.log("11. head object", testKey);
       await expect(bucket.head(testKey)).resolves.toBeNull();
+      console.log("12. get object", testKey);
       await expect(bucket.get(testKey)).resolves.toBeNull();
+      console.log("13. list objects");
 
       expect(await bucket.list()).toMatchObject({
         objects: [],
         truncated: false,
       });
+      console.log("14. done");
     } finally {
       await scope.finalize();
     }

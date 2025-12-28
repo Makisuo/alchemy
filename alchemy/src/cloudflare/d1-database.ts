@@ -299,6 +299,7 @@ export async function D1Database(
       type: "d1",
       name: "D1",
       id: database.id,
+      raw: true,
     },
     miniflareOptions: (maybeRemoteProxyConnectionString) => ({
       d1Databases: {

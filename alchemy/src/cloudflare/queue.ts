@@ -246,6 +246,7 @@ export async function Queue<T = unknown>(
       type: "queue",
       name: "BINDING",
       queue_name: queue.name,
+      raw: true,
     },
     miniflareOptions: (maybeRemoteProxyConnectionString) => ({
       queueProducers: {

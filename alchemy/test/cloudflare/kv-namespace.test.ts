@@ -39,13 +39,9 @@ describe("KV Namespace Resource", () => {
       );
 
       // Verify KV values were set by reading them back
-      await verifyKVValue(
-        kvNamespace.namespaceId,
-        "test-key-1",
-        "test-value-1",
-      );
-      const key2Value = await getKVValue(kvNamespace.namespaceId, "test-key-2");
-      expect(JSON.parse(key2Value)).toEqual({ hello: "world" });
+      await verifyKVValue(kvNamespace, "test-key-1", "test-value-1");
+      const key2Value = await kvNamespace.get("test-key-2", "json");
+      expect(key2Value).toEqual({ hello: "world" });
 
       // Update the KV namespace with new values
       kvNamespace = await KVNamespace(testId, {
@@ -70,12 +66,8 @@ describe("KV Namespace Resource", () => {
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
       // Verify updated values
-      await verifyKVValue(
-        kvNamespace.namespaceId,
-        "test-key-1",
-        "updated-value-1",
-      );
-      await verifyKVValue(kvNamespace.namespaceId, "test-key-3", "new-value-3");
+      await verifyKVValue(kvNamespace, "test-key-1", "updated-value-1");
+      await verifyKVValue(kvNamespace, "test-key-3", "new-value-3");
     } finally {
       await alchemy.destroy(scope);
       if (kvNamespace) {
@@ -179,16 +171,6 @@ describe("KV Namespace Resource", () => {
     }
   });
 
-  async function getKVValue(namespaceId: string, key: string): Promise<string> {
-    const api = await createCloudflareApi();
-    const response = await api.get(
-      `/accounts/${api.accountId}/storage/kv/namespaces/${namespaceId}/values/${key}`,
-    );
-
-    expect(response.ok).toBe(true);
-    return await response.text();
-  }
-
   async function assertKvNamespaceExists(namespaceId: string): Promise<void> {
     const api = await createCloudflareApi();
     const response = await api.get(
@@ -212,7 +194,7 @@ describe("KV Namespace Resource", () => {
   }
 
   async function verifyKVValue(
-    namespaceId: string,
+    kvNamespace: KVNamespace,
     key: string,
     expectedValue: string,
   ): Promise<void> {
@@ -223,7 +205,7 @@ describe("KV Namespace Resource", () => {
 
     while (attempt < maxAttempts) {
       try {
-        const value = await getKVValue(namespaceId, key);
+        const value = await kvNamespace.get(key);
         expect(value).toEqual(expectedValue);
         return; // Success, exit the function
       } catch (error) {

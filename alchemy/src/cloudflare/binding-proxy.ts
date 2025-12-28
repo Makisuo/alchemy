@@ -2,8 +2,9 @@ import * as mf from "miniflare";
 import assert from "node:assert";
 import { Scope } from "../scope";
 import { createCloudflareApi, type CloudflareApiOptions } from "./api";
-import type { Binding, WorkerBindingSpec } from "./bindings";
+import type { Binding } from "./bindings";
 import type { Bound } from "./bound";
+import type { RemoteBinding } from "./miniflare/build-worker-options";
 import { getDefaultPersistPath } from "./miniflare/paths";
 import { createRemoteProxyWorker } from "./miniflare/remote-binding-proxy";
 
@@ -26,7 +27,7 @@ export function createMiniflareBindingProxy<B extends Extract<Binding, object>>(
   props: CloudflareApiOptions & { dev?: { remote?: boolean } },
   target: Omit<B, keyof Bound<B>>,
   config: {
-    remoteBindingSpec: WorkerBindingSpec;
+    remoteBindingSpec: RemoteBinding;
     miniflareOptions: (
       maybeRemoteProxyConnectionString:
         | mf.RemoteProxyConnectionString
@@ -43,7 +44,7 @@ export function createMiniflareBindingProxy<B extends Extract<Binding, object>>(
   props: CloudflareApiOptions & { dev?: { remote?: boolean } },
   target: Omit<B, keyof Bound<B>>,
   config: {
-    remoteBindingSpec: WorkerBindingSpec;
+    remoteBindingSpec: RemoteBinding;
     miniflareOptions: (
       maybeRemoteProxyConnectionString:
         | mf.RemoteProxyConnectionString
@@ -68,7 +69,7 @@ export function createMiniflareBindingProxy<B extends Extract<Binding, object>>(
   props: CloudflareApiOptions & { dev?: { remote?: boolean } },
   target: Omit<B, keyof Bound<B>>,
   config: {
-    remoteBindingSpec: WorkerBindingSpec;
+    remoteBindingSpec: RemoteBinding;
     miniflareOptions: (
       maybeRemoteProxyConnectionString:
         | mf.RemoteProxyConnectionString
@@ -93,16 +94,28 @@ export function createMiniflareBindingProxy<B extends Extract<Binding, object>>(
         void scope.defer(() => proxy.server.close());
       }
       const instance = new mf.Miniflare({
+        name: id,
         script: "",
         modules: true,
+        compatibilityDate: "2025-12-28",
+        compatibilityFlags: ["experimental"],
         defaultPersistRoot: getDefaultPersistPath(scope.rootDir),
         log: process.env.DEBUG ? new mf.Log(mf.LogLevel.DEBUG) : undefined,
         ...config.miniflareOptions(proxy?.connectionString),
       });
-      void scope.defer(() => instance.dispose());
-      return (await instance.getBindings())[
+      void scope.defer(async () => {
+        console.log("disposing instance", id);
+        await instance.dispose();
+      });
+      const bound = (await instance.getBindings())[
         config.remoteBindingSpec.name
       ] as Bound<B>;
+      console.log({
+        connectionString: proxy?.connectionString.href,
+        options: config.miniflareOptions(proxy?.connectionString),
+        bound,
+      });
+      return bound;
     },
     config.interceptors,
   );

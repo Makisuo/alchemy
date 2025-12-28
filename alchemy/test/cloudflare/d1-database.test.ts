@@ -37,6 +37,44 @@ describe("D1 Database Resource", async () => {
   // Create Cloudflare API client for direct verification
   const api = await createCloudflareApi();
 
+  test(`runtime api - local`, { local: true }, async (scope) => {
+    const id = `${BRANCH_PREFIX}-test-runtime-local`;
+    try {
+      let database = await D1Database(id);
+      expect(database.id).toBe("");
+      expect(database.dev.id).toBeTruthy();
+      const session = database.withSession("first-primary");
+      await session
+        .prepare("CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
+        .run();
+      await session.prepare("INSERT INTO test (name) VALUES ('test-1')").run();
+      const { results } = await session.prepare("SELECT * FROM test").all();
+      expect(results).toMatchObject([{ id: 1, name: "test-1" }]);
+    } finally {
+      Object.assign(scope, { local: false });
+      await destroy(scope);
+    }
+  });
+  test(`runtime api - remote`, async (scope) => {
+    const id = `${BRANCH_PREFIX}-test-runtime-remote`;
+    try {
+      let database = await D1Database(id);
+      expect(database.id).toBeTruthy();
+      const session = database.withSession("first-primary");
+      const table = `test_${Date.now()}`;
+      await session
+        .prepare(`CREATE TABLE ${table} (id INTEGER PRIMARY KEY, name TEXT)`)
+        .run();
+      await session
+        .prepare(`INSERT INTO ${table} (name) VALUES ('test-1')`)
+        .run();
+      const { results } = await session.prepare(`SELECT * FROM ${table}`).all();
+      expect(results).toMatchObject([{ id: 1, name: "test-1" }]);
+    } finally {
+      await destroy(scope);
+    }
+  });
+
   test("create and delete database", async (scope) => {
     // Create a test database
     let database: D1Database | undefined;

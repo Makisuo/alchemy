@@ -457,6 +457,7 @@ export async function R2Bucket(
       bucket_name: bucket.name,
       jurisdiction:
         bucket.jurisdiction !== "default" ? bucket.jurisdiction : undefined,
+      raw: true,
     },
     miniflareOptions: (maybeRemoteProxyConnectionString) => ({
       r2Buckets: {
@@ -802,30 +803,34 @@ async function emptyBucket(
   props: BucketProps,
 ) {
   let cursor: string | undefined;
+  const batches: string[][] = [];
   while (true) {
     const result = await listObjects(api, bucketName, {
       jurisdiction: props.jurisdiction,
       cursor,
     });
     if (result.objects.length) {
-      // Another undocumented API! But it lets us delete multiple objects at once instead of one by one.
-      await extractCloudflareResult(
-        `delete ${result.objects.length} objects from bucket "${bucketName}"`,
-        api.delete(
-          `/accounts/${api.accountId}/r2/buckets/${bucketName}/objects`,
-          {
-            headers: withJurisdiction(props),
-            method: "DELETE",
-            body: JSON.stringify(result.objects.map((object) => object.key)),
-          },
-        ),
-      );
+      batches.push(result.objects.map((object) => object.key));
       if (result.cursor) {
         cursor = result.cursor;
         continue;
       }
     }
     break;
+  }
+  for (const batch of batches) {
+    // Another undocumented API! But it lets us delete multiple objects at once instead of one by one.
+    await extractCloudflareResult(
+      `delete ${batch.length} objects from bucket "${bucketName}"`,
+      api.delete(
+        `/accounts/${api.accountId}/r2/buckets/${bucketName}/objects`,
+        {
+          headers: withJurisdiction(props),
+          method: "DELETE",
+          body: JSON.stringify(batch),
+        },
+      ),
+    );
   }
 }
 
@@ -1199,7 +1204,12 @@ function mapHeadersToHttpMetadata(headers: Headers): R2HTTPMetadata {
 
 export async function putObject(
   api: CloudflareApi,
-  { bucketName, key, object, options }: {
+  {
+    bucketName,
+    key,
+    object,
+    options,
+  }: {
     bucketName: string;
     key: string;
     object: PutObjectObject;

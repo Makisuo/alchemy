@@ -56,6 +56,12 @@ type test = {
 
   afterAll(fn: (scope: Scope) => Promise<void>, timeout?: number): void;
 
+  only: (
+    name: string,
+    fn: (scope: Scope) => Promise<any>,
+    timeout?: number,
+  ) => void;
+
   /**
    * Current test scope
    */
@@ -114,6 +120,14 @@ export function test(meta: ImportMeta, defaultOptions?: TestOptions): test {
 
   test.afterAll = (fn: (scope: Scope) => Promise<void>) => {
     return afterAll(() => scope.run(() => fn(scope)));
+  };
+
+  test.only = (
+    name: string,
+    fn: (scope: Scope) => Promise<void>,
+    timeout?: number,
+  ) => {
+    return it.only(name, () => scope.run(() => fn(scope)), timeout);
   };
 
   return test as any;

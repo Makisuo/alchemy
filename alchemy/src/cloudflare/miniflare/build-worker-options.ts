@@ -44,7 +44,7 @@ type RemoteOptionalBindingType =
   | "queue"
   | "r2_bucket";
 
-type RemoteBinding =
+export type RemoteBinding =
   | (Extract<
       WorkerBindingSpec,
       {

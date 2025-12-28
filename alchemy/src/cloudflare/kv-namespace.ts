@@ -209,6 +209,7 @@ export async function KVNamespace(
       type: "kv_namespace",
       name: "KV",
       namespace_id: namespace.namespaceId,
+      raw: true,
     },
     miniflareOptions: (maybeRemoteProxyConnectionString) => ({
       kvNamespaces: {
