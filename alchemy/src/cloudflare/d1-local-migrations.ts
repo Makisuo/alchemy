@@ -67,9 +67,7 @@ export const applyLocalD1Migrations = async (
       if (applied.results.some((m) => m.name === id)) {
         continue;
       }
-      const statements = splitSqlStatements(sql).map((s) =>
-        session.prepare(s),
-      );
+      const statements = splitSqlStatements(sql).map((s) => session.prepare(s));
       statements.push(insertRecord.bind(id, "migration"));
       await session.batch(statements);
     }
@@ -79,9 +77,7 @@ export const applyLocalD1Migrations = async (
         continue;
       }
       // Split into statements to prevent D1_ERROR: statement too long: SQLITE_TOOBIG.
-      const statements = splitSqlStatements(sql).map((s) =>
-        session.prepare(s),
-      );
+      const statements = splitSqlStatements(sql).map((s) => session.prepare(s));
       statements.push(insertRecord.bind(name, "import"));
       await session.batch(statements);
     }
