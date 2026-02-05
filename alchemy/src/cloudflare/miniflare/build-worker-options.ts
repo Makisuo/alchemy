@@ -8,6 +8,7 @@ import type { CloudflareApi } from "../api.ts";
 import type {
   Binding,
   Bindings,
+  WorkerBindingSendEmail,
   WorkerBindingService,
   WorkerBindingSpec,
 } from "../bindings.ts";
@@ -53,6 +54,10 @@ type RemoteBinding =
     > & {
       raw: true;
     })
+  // TODO: mixed signals on whether send_email requires `raw` boolean:
+  // - implies yes: https://github.com/cloudflare/workers-sdk/blob/482cb5d12ca897e3a9a7d6cc8c650247e86fa6c4/packages/wrangler/src/api/remoteBindings/start-remote-proxy-session.ts#L27
+  // - implies no: https://github.com/cloudflare/workers-sdk/blob/937425cdfe80c0c7f16b5ad47ba905a98fdb5f2e/packages/workers-utils/src/worker.ts#L88
+  | WorkerBindingSendEmail
   | WorkerBindingService;
 
 type BaseWorkerOptions = {
@@ -274,6 +279,31 @@ export const buildWorkerOptions = async (
         };
         break;
       }
+      case "send_email": {
+        const properties = {
+          name: key,
+          allowed_sender_addresses: binding.allowedSenderAddresses,
+          ...("allowedDestinationAddresses" in binding
+            ? {
+                allowed_destination_addresses:
+                  binding.allowedDestinationAddresses,
+              }
+            : "destinationAddress" in binding
+              ? {
+                  destination_address: binding.destinationAddress,
+                }
+              : {}),
+        };
+        if (isRemoteBinding(binding)) {
+          remoteBindings.push({
+            type: "send_email",
+            ...properties,
+          });
+        } else {
+          (options.email ??= { send_email: [] }).send_email!.push(properties);
+        }
+        break;
+      }
       case "r2_bucket": {
         if (isRemoteBinding(binding)) {
           remoteBindings.push({
@@ -434,6 +464,23 @@ export const buildWorkerOptions = async (
             id: binding.bucket_name,
             remoteProxyConnectionString: remoteProxy.connectionString,
           };
+          break;
+        case "send_email":
+          (options.email ??= { send_email: [] }).send_email!.push({
+            name: binding.name,
+            allowed_sender_addresses: binding.allowed_sender_addresses,
+            ...("allowed_destination_addresses" in binding
+              ? {
+                  allowed_destination_addresses:
+                    binding.allowed_destination_addresses,
+                }
+              : "destination_address" in binding
+                ? {
+                    destination_address: binding.destination_address,
+                  }
+                : {}),
+            remoteProxyConnectionString: remoteProxy.connectionString,
+          });
           break;
         case "service":
           (options.serviceBindings ??= {})[binding.name] = {
