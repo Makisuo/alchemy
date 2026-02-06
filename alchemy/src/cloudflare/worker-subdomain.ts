@@ -28,6 +28,12 @@ interface WorkerSubdomainProps extends CloudflareApiOptions {
    */
   retain?: boolean;
   /**
+   * Enables worker preview subdomains
+   *
+   * @default false
+   */
+  previewSubdomains?: boolean;
+  /**
    * If true, the subdomain will not be created, but will be retained if it already exists.
    * This is used for local development.
    *
@@ -64,7 +70,11 @@ export const WorkerSubdomain = Resource(
       }
       return this.destroy();
     }
-    await enableWorkerSubdomain(api, props.scriptName);
+    await enableWorkerSubdomain(
+      api,
+      props.scriptName,
+      props.previewSubdomains ?? false,
+    );
     const subdomain = await getAccountSubdomain(api);
     const base = `${subdomain}.workers.dev`;
     let url: string;
@@ -102,6 +112,7 @@ export async function disableWorkerSubdomain(
 export async function enableWorkerSubdomain(
   api: CloudflareApi,
   scriptName: string,
+  previewSubdomains: boolean,
 ) {
   await withExponentialBackoff(
     () =>
@@ -111,7 +122,7 @@ export async function enableWorkerSubdomain(
           `/accounts/${api.accountId}/workers/scripts/${scriptName}/subdomain`,
           {
             enabled: true,
-            previews_enabled: true,
+            previews_enabled: previewSubdomains,
           },
         ),
       ),

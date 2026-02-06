@@ -177,6 +177,14 @@ export interface BaseWorkerProps<
   url?: boolean;
 
   /**
+   * Whether to enable preview subdomains for this worker
+   *
+   * If true, the worker will be available at {name}-preview.{subdomain}.workers.dev
+   * @default false
+   */
+  previewSubdomains?: boolean;
+
+  /**
    * Specify the observability behavior of the Worker.
    *
    * @see https://developers.cloudflare.com/workers/wrangler/configuration/#observability
@@ -1516,6 +1524,7 @@ async function provisionResources<B extends Bindings>(
             previewVersionId: props.version ? options.result?.id : undefined,
             retain: !!props.version,
             dev: options.local,
+            previewSubdomains: props.previewSubdomains,
             ...input.api,
           })
         : undefined,
