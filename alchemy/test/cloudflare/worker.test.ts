@@ -10,6 +10,7 @@ import { DurableObjectNamespace } from "../../src/cloudflare/durable-object-name
 import { KVNamespace } from "../../src/cloudflare/kv-namespace.ts";
 import type { SingleStepMigration } from "../../src/cloudflare/worker-migration.ts";
 import { WorkerRef } from "../../src/cloudflare/worker-ref.ts";
+import { getWorkerSubdomain } from "../../src/cloudflare/worker-subdomain.ts";
 import {
   deleteWorker,
   getScriptMetadata,
@@ -819,7 +820,7 @@ describe("Worker Resource", () => {
           export default {
             async fetch(request, env, ctx) {
               const url = new URL(request.url);
-              
+
               // Echo endpoint
               if (url.pathname.startsWith('/echo/')) {
                 const message = url.pathname.split('/echo/')[1];
@@ -828,20 +829,20 @@ describe("Worker Resource", () => {
                   headers: { 'Content-Type': 'text/plain' }
                 });
               }
-              
+
               // Recursive endpoint that calls itself
               if (url.pathname.startsWith('/recursive/')) {
                 const parts = url.pathname.split('/recursive/')[1].split('/');
                 const message = parts[0] || '';
                 const count = parseInt(parts[1] || '0', 10);
-                
+
                 if (count <= 0) {
                   return new Response('Final result: ' + message, {
                     status: 200,
                     headers: { 'Content-Type': 'text/plain' }
                   });
                 }
-                
+
                 // Call self using the SELF binding
                 try {
                   const response = await env.SELF.fetch(
@@ -855,7 +856,7 @@ describe("Worker Resource", () => {
                   });
                 }
               }
-              
+
               return new Response('Self-binding Worker is running!', {
                 status: 200,
                 headers: { 'Content-Type': 'text/plain' }
@@ -1116,7 +1117,7 @@ describe("Worker Resource", () => {
       export default {
         async fetch(request, env, ctx) {
           const url = new URL(request.url);
-          
+
           if (url.pathname === '/api/data') {
             return Response.json({
               workerName: "${targetWorkerName}",
@@ -1147,16 +1148,16 @@ describe("Worker Resource", () => {
       export default {
         async fetch(request, env, ctx) {
           const url = new URL(request.url);
-          
+
           // Call the target worker via binding
           if (url.pathname === '/call-target') {
             try {
               const targetResponse = await env.TARGET_WORKER.fetch(
                 new Request('https://example.com/api/data')
               );
-              
+
               const targetData = await targetResponse.json();
-              
+
               return Response.json({
                 success: true,
                 callerName: "${callerWorkerName}",
@@ -1177,7 +1178,7 @@ describe("Worker Resource", () => {
                 message: "Test message from caller",
                 timestamp: Date.now()
               };
-              
+
               const targetResponse = await env.TARGET_WORKER.fetch(
                 new Request('https://example.com/api/echo', {
                   method: 'POST',
@@ -1185,9 +1186,9 @@ describe("Worker Resource", () => {
                   body: JSON.stringify(testPayload)
                 })
               );
-              
+
               const echoResponse = await targetResponse.json();
-              
+
               return Response.json({
                 success: true,
                 callerName: "${callerWorkerName}",
@@ -1309,19 +1310,19 @@ describe("Worker Resource", () => {
           export default {
             async fetch(request, env, ctx) {
               const url = new URL(request.url);
-              
+
               // Log an event to the analytics engine
               if (url.pathname === '/log-event') {
                 try {
                   const body = await request.json();
-                  
+
                   // Write an event to the analytics dataset
                   env.ANALYTICS.writeDataPoint({
                     blobs: [body.action, body.category, body.details || ""],
                     doubles: [body.value || 1.0],
                     indexes: [body.userId || "anonymous"]
                   });
-                  
+
                   return Response.json({
                     success: true,
                     message: "Event logged successfully"
@@ -1333,7 +1334,7 @@ describe("Worker Resource", () => {
                   }, { status: 500 });
                 }
               }
-              
+
               // Confirm binding exists
               if (url.pathname === '/check-binding') {
                 return Response.json({
@@ -1342,7 +1343,7 @@ describe("Worker Resource", () => {
                   success: true
                 });
               }
-              
+
               return new Response('Analytics Engine Worker is running!', {
                 status: 200,
                 headers: { 'Content-Type': 'text/plain' }
@@ -1468,7 +1469,7 @@ describe("Worker Resource", () => {
         script: `
           export default {
             async fetch(request, env, ctx) {
-              return new Response('Hello from base worker!', { 
+              return new Response('Hello from base worker!', {
                 status: 200,
                 headers: { 'Content-Type': 'text/plain' }
               });
@@ -1501,7 +1502,7 @@ describe("Worker Resource", () => {
                 const asset = await env.ASSETS.fetch(request);
                 if (asset) {
                   const content = await asset.text();
-                  return new Response(content, { 
+                  return new Response(content, {
                     status: 200,
                     headers: { 'Content-Type': 'text/plain' }
                   });
@@ -2637,6 +2638,153 @@ describe("Worker Resource", () => {
       });
     } finally {
       await destroy(scope);
+    }
+  });
+
+  test("create worker with previewSubdomains enabled", async (scope) => {
+    const workerName = `${BRANCH_PREFIX}-test-worker-preview-subs`;
+
+    let worker: Worker | undefined;
+    try {
+      // Create a worker with url: true and previewSubdomains: true
+      worker = await Worker(workerName, {
+        name: workerName,
+        adopt: true,
+        script: `
+          export default {
+            async fetch(request, env, ctx) {
+              return new Response('Hello with preview subdomains!', { status: 200 });
+            }
+          };
+        `,
+        format: "esm",
+        url: true,
+        previewSubdomains: true,
+      });
+
+      expect(worker.id).toBeTruthy();
+      expect(worker.name).toEqual(workerName);
+      expect(worker.url).toBeTruthy();
+
+      // Verify that previews_enabled is true via the Cloudflare API
+      const subdomainData = await getWorkerSubdomain(api, workerName);
+      expect(subdomainData.enabled).toBe(true);
+      expect(subdomainData.previews_enabled).toBe(true);
+    } finally {
+      await destroy(scope);
+      await assertWorkerDoesNotExist(api, workerName);
+    }
+  });
+
+  test("create worker with previewSubdomains defaults to false", async (scope) => {
+    const workerName = `${BRANCH_PREFIX}-test-worker-no-preview-subs`;
+
+    let worker: Worker | undefined;
+    try {
+      // Create a worker with url: true but without setting previewSubdomains (defaults to false)
+      worker = await Worker(workerName, {
+        name: workerName,
+        adopt: true,
+        script: `
+          export default {
+            async fetch(request, env, ctx) {
+              return new Response('Hello without preview subdomains!', { status: 200 });
+            }
+          };
+        `,
+        format: "esm",
+        url: true,
+      });
+
+      expect(worker.id).toBeTruthy();
+      expect(worker.url).toBeTruthy();
+
+      // Verify that previews_enabled is false via the Cloudflare API
+      const subdomainData = await getWorkerSubdomain(api, workerName);
+      expect(subdomainData.enabled).toBe(true);
+      expect(subdomainData.previews_enabled).toBe(false);
+    } finally {
+      await destroy(scope);
+      await assertWorkerDoesNotExist(api, workerName);
+    }
+  });
+
+  test("toggle previewSubdomains from false to true and back", async (scope) => {
+    const workerName = `${BRANCH_PREFIX}-test-worker-toggle-preview`;
+
+    let worker: Worker | undefined;
+    try {
+      // Create a worker with previewSubdomains: false (explicit)
+      worker = await Worker(workerName, {
+        name: workerName,
+        adopt: true,
+        script: `
+          export default {
+            async fetch(request, env, ctx) {
+              return new Response('Hello!', { status: 200 });
+            }
+          };
+        `,
+        format: "esm",
+        url: true,
+        previewSubdomains: false,
+      });
+
+      expect(worker.url).toBeTruthy();
+
+      // Verify previews_enabled is false
+      let subdomainData = await getWorkerSubdomain(api, workerName);
+      expect(subdomainData.enabled).toBe(true);
+      expect(subdomainData.previews_enabled).toBe(false);
+
+      // Update the worker to enable previewSubdomains
+      worker = await Worker(workerName, {
+        name: workerName,
+        adopt: true,
+        script: `
+          export default {
+            async fetch(request, env, ctx) {
+              return new Response('Hello with previews!', { status: 200 });
+            }
+          };
+        `,
+        format: "esm",
+        url: true,
+        previewSubdomains: true,
+      });
+
+      expect(worker.url).toBeTruthy();
+
+      // Verify previews_enabled is now true
+      subdomainData = await getWorkerSubdomain(api, workerName);
+      expect(subdomainData.enabled).toBe(true);
+      expect(subdomainData.previews_enabled).toBe(true);
+
+      // Update the worker to disable previewSubdomains again
+      worker = await Worker(workerName, {
+        name: workerName,
+        adopt: true,
+        script: `
+          export default {
+            async fetch(request, env, ctx) {
+              return new Response('Hello without previews!', { status: 200 });
+            }
+          };
+        `,
+        format: "esm",
+        url: true,
+        previewSubdomains: false,
+      });
+
+      expect(worker.url).toBeTruthy();
+
+      // Verify previews_enabled is false again
+      subdomainData = await getWorkerSubdomain(api, workerName);
+      expect(subdomainData.enabled).toBe(true);
+      expect(subdomainData.previews_enabled).toBe(false);
+    } finally {
+      await destroy(scope);
+      await assertWorkerDoesNotExist(api, workerName);
     }
   });
 
