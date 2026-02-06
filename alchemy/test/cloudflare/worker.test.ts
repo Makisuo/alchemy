@@ -1525,6 +1525,7 @@ describe("Worker Resource", () => {
           not_found_handling: "single-page-application",
         },
         compatibilityFlags: ["nodejs_compat"],
+        previewSubdomains: true,
       });
 
       // Verify the version worker properties
@@ -1884,6 +1885,7 @@ describe("Worker Resource", () => {
         `,
         format: "esm",
         version: versionLabel,
+        previewSubdomains: true,
       });
 
       expect(versionedWorker.id).toBeTruthy();
