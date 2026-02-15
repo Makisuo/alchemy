@@ -1,4 +1,4 @@
-import type { Secret } from "../secret.ts";
+import { Secret } from "../secret.ts";
 import { safeFetch } from "../util/safe-fetch.ts";
 
 /**
@@ -48,7 +48,11 @@ export class RailwayApi {
    */
   constructor(options: RailwayApiOptions = {}) {
     this.token =
-      options.apiToken?.unencrypted ?? process.env.RAILWAY_API_TOKEN ?? "";
+      (options.apiToken
+        ? (Secret.unwrap(options.apiToken) as string)
+        : undefined) ??
+      process.env.RAILWAY_API_TOKEN ??
+      "";
 
     if (!this.token) {
       throw new Error(

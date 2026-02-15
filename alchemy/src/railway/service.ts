@@ -1,6 +1,6 @@
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
-import { RailwayApi, type RailwayApiOptions } from "./api.ts";
+import { RailwayApi, RailwayError, type RailwayApiOptions } from "./api.ts";
 import { runRailwayDeleteMutation } from "./delete-retry.ts";
 import type { Environment } from "./environment.ts";
 import type { Project } from "./project.ts";
@@ -18,6 +18,37 @@ export interface ServiceSource {
    * Docker image to deploy
    */
   image?: string;
+}
+
+export type ServiceDeploymentTriggerProvider = "github";
+
+export interface ServiceDeploymentTrigger {
+  /**
+   * Branch to trigger deployments from (e.g. "main")
+   */
+  branch: string;
+
+  /**
+   * Trigger provider
+   *
+   * @default "github"
+   */
+  provider?: ServiceDeploymentTriggerProvider;
+
+  /**
+   * Repository to watch (owner/repo). Defaults to source.repo.
+   */
+  repository?: string;
+
+  /**
+   * Optional root directory for trigger-scoped builds.
+   */
+  rootDirectory?: string;
+
+  /**
+   * Whether to require check suites on trigger.
+   */
+  checkSuites?: boolean;
 }
 
 /**
@@ -40,6 +71,11 @@ export interface ServiceProps extends RailwayApiOptions {
    * Source configuration (repo or image)
    */
   source?: ServiceSource;
+
+  /**
+   * Deployment trigger configuration for repository-based deployments.
+   */
+  deploymentTrigger?: ServiceDeploymentTrigger;
 
   /**
    * Build command for the service
@@ -89,7 +125,7 @@ export interface ServiceProps extends RailwayApiOptions {
  */
 export type Service = Omit<
   ServiceProps,
-  "adopt" | "project" | "environment" | "source"
+  "adopt" | "project" | "environment" | "source" | "deploymentTrigger"
 > & {
   /**
    * The Railway service ID
@@ -120,6 +156,26 @@ export type Service = Omit<
    * Time the service was last updated
    */
   updatedAt: string;
+
+  /**
+   * Managed deployment trigger ID
+   */
+  deploymentTriggerId?: string;
+
+  /**
+   * Managed deployment trigger branch
+   */
+  deploymentTriggerBranch?: string;
+
+  /**
+   * Managed deployment trigger provider
+   */
+  deploymentTriggerProvider?: ServiceDeploymentTriggerProvider;
+
+  /**
+   * Managed deployment trigger repository
+   */
+  deploymentTriggerRepository?: string;
 };
 
 /**
@@ -177,6 +233,7 @@ export const Service = Resource(
         : props.project.projectId;
     const name =
       props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
+    const desiredDeploymentTrigger = resolveDesiredDeploymentTrigger(props);
 
     // Resolve environment ID
     let environmentId: string;
@@ -226,6 +283,20 @@ export const Service = Resource(
       // Update service instance config
       await updateServiceInstance(api, serviceId, environmentId, props);
 
+      let managedDeploymentTrigger: ManagedDeploymentTriggerOutput | undefined;
+      if (desiredDeploymentTrigger) {
+        managedDeploymentTrigger = await reconcileDeploymentTrigger({
+          api,
+          serviceId,
+          projectId,
+          environmentId,
+          desired: desiredDeploymentTrigger,
+          previousTriggerId: this.output.deploymentTriggerId,
+        });
+      } else if (this.output.deploymentTriggerId) {
+        await deleteDeploymentTrigger(api, this.output.deploymentTriggerId);
+      }
+
       return {
         serviceId: this.output.serviceId,
         projectId: this.output.projectId,
@@ -239,6 +310,7 @@ export const Service = Resource(
         numReplicas: props.numReplicas,
         cronSchedule: props.cronSchedule,
         region: props.region,
+        ...toDeploymentTriggerOutput(managedDeploymentTrigger),
       };
     }
 
@@ -254,6 +326,17 @@ export const Service = Resource(
           environmentId,
           props,
         );
+
+        const managedDeploymentTrigger = desiredDeploymentTrigger
+          ? await reconcileDeploymentTrigger({
+              api,
+              serviceId: existing.serviceId,
+              projectId,
+              environmentId,
+              desired: desiredDeploymentTrigger,
+            })
+          : undefined;
+
         return {
           ...existing,
           environmentId,
@@ -263,6 +346,7 @@ export const Service = Resource(
           numReplicas: props.numReplicas,
           cronSchedule: props.cronSchedule,
           region: props.region,
+          ...toDeploymentTriggerOutput(managedDeploymentTrigger),
         };
       }
     }
@@ -301,6 +385,15 @@ export const Service = Resource(
 
     // Configure service instance
     await updateServiceInstance(api, service.id, environmentId, props);
+    const managedDeploymentTrigger = desiredDeploymentTrigger
+      ? await reconcileDeploymentTrigger({
+          api,
+          serviceId: service.id,
+          projectId,
+          environmentId,
+          desired: desiredDeploymentTrigger,
+        })
+      : undefined;
 
     return {
       serviceId: service.id,
@@ -315,9 +408,309 @@ export const Service = Resource(
       region: props.region,
       createdAt: service.createdAt,
       updatedAt: service.updatedAt,
+      ...toDeploymentTriggerOutput(managedDeploymentTrigger),
     };
   },
 );
+
+interface DesiredDeploymentTrigger {
+  provider: ServiceDeploymentTriggerProvider;
+  repository: string;
+  branch: string;
+  rootDirectory?: string;
+  checkSuites?: boolean;
+}
+
+interface DeploymentTrigger {
+  id: string;
+  provider: string;
+  repository: string;
+  branch: string;
+  serviceId?: string | null;
+  checkSuites: boolean;
+}
+
+interface ManagedDeploymentTriggerOutput {
+  id: string;
+  provider: ServiceDeploymentTriggerProvider;
+  repository: string;
+  branch: string;
+}
+
+function resolveDesiredDeploymentTrigger(
+  props: ServiceProps,
+): DesiredDeploymentTrigger | undefined {
+  const trigger = props.deploymentTrigger;
+  if (!trigger) return undefined;
+
+  const provider = trigger.provider ?? "github";
+  if (provider !== "github") {
+    throw new Error(
+      `Unsupported deployment trigger provider "${provider}". Currently only "github" is supported.`,
+    );
+  }
+
+  const repository = (trigger.repository ?? props.source?.repo)?.trim();
+  if (!repository) {
+    throw new Error(
+      "deploymentTrigger requires source.repo or deploymentTrigger.repository.",
+    );
+  }
+
+  const branch = trigger.branch?.trim();
+  if (!branch) {
+    throw new Error("deploymentTrigger.branch is required.");
+  }
+
+  return {
+    provider,
+    repository,
+    branch,
+    rootDirectory: trigger.rootDirectory,
+    checkSuites: trigger.checkSuites,
+  };
+}
+
+function toDeploymentTriggerOutput(
+  managed: ManagedDeploymentTriggerOutput | undefined,
+): Pick<
+  Service,
+  | "deploymentTriggerId"
+  | "deploymentTriggerBranch"
+  | "deploymentTriggerProvider"
+  | "deploymentTriggerRepository"
+> {
+  return {
+    deploymentTriggerId: managed?.id,
+    deploymentTriggerBranch: managed?.branch,
+    deploymentTriggerProvider: managed?.provider,
+    deploymentTriggerRepository: managed?.repository,
+  };
+}
+
+async function reconcileDeploymentTrigger({
+  api,
+  serviceId,
+  projectId,
+  environmentId,
+  desired,
+  previousTriggerId,
+}: {
+  api: RailwayApi;
+  serviceId: string;
+  projectId: string;
+  environmentId: string;
+  desired: DesiredDeploymentTrigger;
+  previousTriggerId?: string;
+}): Promise<ManagedDeploymentTriggerOutput> {
+  const triggers = await listServiceRepoTriggers(api, serviceId);
+  const previousTrigger = previousTriggerId
+    ? triggers.find((trigger) => trigger.id === previousTriggerId)
+    : undefined;
+  const matchingTrigger = triggers.find(
+    (trigger) =>
+      trigger.provider === desired.provider &&
+      trigger.repository === desired.repository &&
+      (!trigger.serviceId || trigger.serviceId === serviceId),
+  );
+  const managedTrigger = previousTrigger ?? matchingTrigger;
+
+  if (!managedTrigger) {
+    return await createDeploymentTrigger(api, {
+      serviceId,
+      projectId,
+      environmentId,
+      desired,
+    });
+  }
+
+  const shouldUpdate =
+    managedTrigger.branch !== desired.branch ||
+    managedTrigger.repository !== desired.repository ||
+    (desired.checkSuites !== undefined &&
+      managedTrigger.checkSuites !== desired.checkSuites);
+
+  if (!shouldUpdate) {
+    return {
+      id: managedTrigger.id,
+      branch: managedTrigger.branch,
+      provider: desired.provider,
+      repository: managedTrigger.repository,
+    };
+  }
+
+  return await updateDeploymentTrigger(api, managedTrigger.id, desired);
+}
+
+async function listServiceRepoTriggers(
+  api: RailwayApi,
+  serviceId: string,
+): Promise<DeploymentTrigger[]> {
+  const data = await api.query<{
+    service: {
+      repoTriggers: {
+        edges: Array<{
+          node: DeploymentTrigger;
+        }>;
+      };
+    };
+  }>(
+    `query service($id: String!) {
+      service(id: $id) {
+        repoTriggers(first: 50) {
+          edges {
+            node {
+              id
+              provider
+              repository
+              branch
+              serviceId
+              checkSuites
+            }
+          }
+        }
+      }
+    }`,
+    { id: serviceId },
+  );
+
+  return data.service.repoTriggers.edges.map((edge) => edge.node);
+}
+
+async function createDeploymentTrigger(
+  api: RailwayApi,
+  {
+    serviceId,
+    projectId,
+    environmentId,
+    desired,
+  }: {
+    serviceId: string;
+    projectId: string;
+    environmentId: string;
+    desired: DesiredDeploymentTrigger;
+  },
+): Promise<ManagedDeploymentTriggerOutput> {
+  const input: Record<string, any> = {
+    provider: desired.provider,
+    repository: desired.repository,
+    branch: desired.branch,
+    projectId,
+    environmentId,
+    serviceId,
+  };
+  if (desired.rootDirectory !== undefined) {
+    input.rootDirectory = desired.rootDirectory;
+  }
+  if (desired.checkSuites !== undefined) {
+    input.checkSuites = desired.checkSuites;
+  }
+
+  const data = await api.query<{
+    deploymentTriggerCreate: {
+      id: string;
+      branch: string;
+      provider: string;
+      repository: string;
+    };
+  }>(
+    `mutation deploymentTriggerCreate($input: DeploymentTriggerCreateInput!) {
+      deploymentTriggerCreate(input: $input) {
+        id
+        branch
+        provider
+        repository
+      }
+    }`,
+    { input },
+  );
+
+  return {
+    id: data.deploymentTriggerCreate.id,
+    branch: data.deploymentTriggerCreate.branch,
+    provider: desired.provider,
+    repository: data.deploymentTriggerCreate.repository,
+  };
+}
+
+async function updateDeploymentTrigger(
+  api: RailwayApi,
+  triggerId: string,
+  desired: DesiredDeploymentTrigger,
+): Promise<ManagedDeploymentTriggerOutput> {
+  const input: Record<string, any> = {
+    branch: desired.branch,
+    repository: desired.repository,
+  };
+  if (desired.rootDirectory !== undefined) {
+    input.rootDirectory = desired.rootDirectory;
+  }
+  if (desired.checkSuites !== undefined) {
+    input.checkSuites = desired.checkSuites;
+  }
+
+  const data = await api.query<{
+    deploymentTriggerUpdate: {
+      id: string;
+      branch: string;
+      provider: string;
+      repository: string;
+    };
+  }>(
+    `mutation deploymentTriggerUpdate($id: String!, $input: DeploymentTriggerUpdateInput!) {
+      deploymentTriggerUpdate(id: $id, input: $input) {
+        id
+        branch
+        provider
+        repository
+      }
+    }`,
+    {
+      id: triggerId,
+      input,
+    },
+  );
+
+  return {
+    id: data.deploymentTriggerUpdate.id,
+    branch: data.deploymentTriggerUpdate.branch,
+    provider: desired.provider,
+    repository: data.deploymentTriggerUpdate.repository,
+  };
+}
+
+async function deleteDeploymentTrigger(
+  api: RailwayApi,
+  triggerId: string,
+): Promise<void> {
+  await runRailwayDeleteMutation(async () => {
+    try {
+      await api.query(
+        `mutation deploymentTriggerDelete($id: String!) {
+          deploymentTriggerDelete(id: $id)
+        }`,
+        { id: triggerId },
+      );
+    } catch (error) {
+      if (isDeploymentTriggerMissingError(error)) {
+        return;
+      }
+      throw error;
+    }
+  });
+}
+
+function isDeploymentTriggerMissingError(error: unknown): boolean {
+  if (!(error instanceof RailwayError)) {
+    return false;
+  }
+
+  return error.errors.some((e) =>
+    /deployment trigger .*not found|could not find deployment trigger|not found/i.test(
+      e.message,
+    ),
+  );
+}
 
 async function updateServiceInstance(
   api: RailwayApi,

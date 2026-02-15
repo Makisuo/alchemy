@@ -129,23 +129,25 @@ export const Variable = Resource(
     if (this.phase === "delete") {
       // Delete all tracked keys
       const keys = this.output?.keys ?? [];
-      for (const key of keys) {
-        await runRailwayDeleteMutation(() =>
-          api.query(
-            `mutation variableDelete($input: VariableDeleteInput!) {
-              variableDelete(input: $input)
-            }`,
-            {
-              input: {
-                projectId,
-                environmentId,
-                serviceId,
-                name: key,
+      await Promise.all(
+        keys.map((key) =>
+          runRailwayDeleteMutation(() =>
+            api.query(
+              `mutation variableDelete($input: VariableDeleteInput!) {
+                variableDelete(input: $input)
+              }`,
+              {
+                input: {
+                  projectId,
+                  environmentId,
+                  serviceId,
+                  name: key,
+                },
               },
-            },
+            ),
           ),
-        );
-      }
+        ),
+      );
       return this.destroy();
     }
 
@@ -159,23 +161,25 @@ export const Variable = Resource(
     if (this.output?.keys) {
       const newKeys = new Set(Object.keys(props.variables));
       const removedKeys = this.output.keys.filter((k) => !newKeys.has(k));
-      for (const key of removedKeys) {
-        await runRailwayDeleteMutation(() =>
-          api.query(
-            `mutation variableDelete($input: VariableDeleteInput!) {
-              variableDelete(input: $input)
-            }`,
-            {
-              input: {
-                projectId,
-                environmentId,
-                serviceId,
-                name: key,
+      await Promise.all(
+        removedKeys.map((key) =>
+          runRailwayDeleteMutation(() =>
+            api.query(
+              `mutation variableDelete($input: VariableDeleteInput!) {
+                variableDelete(input: $input)
+              }`,
+              {
+                input: {
+                  projectId,
+                  environmentId,
+                  serviceId,
+                  name: key,
+                },
               },
-            },
+            ),
           ),
-        );
-      }
+        ),
+      );
     }
 
     // Upsert all variables

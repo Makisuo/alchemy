@@ -166,7 +166,7 @@ export const Domain = Resource(
           {
             serviceId,
             environmentId,
-            input: {},
+            input: { targetPort: props.targetPort },
           },
         );
       }

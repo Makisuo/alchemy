@@ -41,7 +41,7 @@ export interface ProjectProps extends RailwayApiOptions {
 /**
  * Output type for a Railway Project
  */
-export type Project = Omit<ProjectProps, "adopt" | "delete"> & {
+export type Project = Omit<ProjectProps, "adopt" | "delete" | "workspaceId"> & {
   /**
    * The Railway project ID
    */

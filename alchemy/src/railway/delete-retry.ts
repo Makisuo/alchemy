@@ -44,11 +44,7 @@ export async function runRailwayDeleteMutation(
   operation: () => Promise<unknown>,
   options: RailwayDeleteRetryOptions = {},
 ): Promise<void> {
-  const {
-    maxAttempts = 8,
-    initialDelayMs = 500,
-    maxDelayMs = 5000,
-  } = options;
+  const { maxAttempts = 8, initialDelayMs = 500, maxDelayMs = 5000 } = options;
 
   try {
     await withExponentialBackoff(

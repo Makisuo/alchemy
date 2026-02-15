@@ -34,7 +34,10 @@ describe("Railway Domain Replace", () => {
           } as never;
         }
 
-        if (query.includes("serviceDomainDelete") || query.includes("customDomainDelete")) {
+        if (
+          query.includes("serviceDomainDelete") ||
+          query.includes("customDomainDelete")
+        ) {
           return {} as never;
         }
 
@@ -64,7 +67,9 @@ describe("Railway Domain Replace", () => {
 
       expect(custom.domain).toBe("api.example.com");
       expect(
-        querySpy.mock.calls.some(([query]) => query.includes("customDomainCreate")),
+        querySpy.mock.calls.some(([query]) =>
+          query.includes("customDomainCreate"),
+        ),
       ).toBe(true);
     } finally {
       await scope.finalize();
@@ -145,7 +150,9 @@ describe("Railway Domain Replace", () => {
       await scope.finalize();
       expect(deleteAttempts).toBe(2);
       expect(
-        querySpy.mock.calls.some(([query]) => query.includes("serviceDomainDelete")),
+        querySpy.mock.calls.some(([query]) =>
+          query.includes("serviceDomainDelete"),
+        ),
       ).toBe(true);
     } finally {
       vi.restoreAllMocks();
