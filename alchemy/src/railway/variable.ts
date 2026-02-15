@@ -133,7 +133,6 @@ export const Variable = Resource(
         projectId,
         environmentId,
         serviceId,
-        variables: props.variables,
         keys: Object.keys(props.variables),
       };
     }
