@@ -376,26 +376,71 @@ export const Service = Resource(
       input.source = { image: props.source.image };
     }
 
-    const data = await api.query<{
-      serviceCreate: {
-        id: string;
-        name: string;
-        createdAt: string;
-        updatedAt: string;
-      };
-    }>(
-      `mutation serviceCreate($input: ServiceCreateInput!) {
-        serviceCreate(input: $input) {
-          id
-          name
-          createdAt
-          updatedAt
-        }
-      }`,
-      { input },
-    );
+    let service: {
+      id: string;
+      name: string;
+      createdAt: string;
+      updatedAt: string;
+    };
 
-    const service = data.serviceCreate;
+    try {
+      const data = await api.query<{
+        serviceCreate: {
+          id: string;
+          name: string;
+          createdAt: string;
+          updatedAt: string;
+        };
+      }>(
+        `mutation serviceCreate($input: ServiceCreateInput!) {
+          serviceCreate(input: $input) {
+            id
+            name
+            createdAt
+            updatedAt
+          }
+        }`,
+        { input },
+      );
+      service = data.serviceCreate;
+    } catch (error) {
+      // If the service already exists and adopt is enabled, fall back to adopting
+      if (adopt && isServiceAlreadyExistsError(error)) {
+        const existing = await findServiceByName(api, projectId, name);
+        if (existing) {
+          await updateServiceInstance(
+            api,
+            existing.serviceId,
+            environmentId,
+            props,
+          );
+
+          const managedDeploymentTrigger = desiredDeploymentTrigger
+            ? await reconcileDeploymentTrigger({
+                api,
+                serviceId: existing.serviceId,
+                projectId,
+                environmentId,
+                desired: desiredDeploymentTrigger,
+              })
+            : undefined;
+
+          return {
+            ...existing,
+            environmentId,
+            source: props.source,
+            buildCommand: props.buildCommand,
+            startCommand: props.startCommand,
+            healthcheckPath: props.healthcheckPath,
+            numReplicas: props.numReplicas,
+            cronSchedule: props.cronSchedule,
+            region: props.region,
+            ...toDeploymentTriggerOutput(managedDeploymentTrigger),
+          };
+        }
+      }
+      throw error;
+    }
 
     // Configure service instance
     await updateServiceInstance(api, service.id, environmentId, props);
@@ -840,4 +885,13 @@ async function findServiceByName(
     createdAt: match.node.createdAt,
     updatedAt: match.node.updatedAt,
   };
+}
+
+function isServiceAlreadyExistsError(error: unknown): boolean {
+  if (!(error instanceof RailwayError)) {
+    return false;
+  }
+  return error.errors.some((e) =>
+    /already exists/i.test(e.message),
+  );
 }
