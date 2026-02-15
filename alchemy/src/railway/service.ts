@@ -269,7 +269,7 @@ export const Service = Resource(
     if (
       serviceId &&
       this.output &&
-      (await serviceExists(api, serviceId))
+      (await serviceExists(api, projectId, serviceId))
     ) {
       // Source is immutable — replace if changed
       // Guard: if prevSource is undefined (old state format), skip comparison
@@ -895,24 +895,31 @@ async function findServiceByName(
 
 async function serviceExists(
   api: RailwayApi,
+  projectId: string,
   serviceId: string,
 ): Promise<boolean> {
-  try {
-    await api.query<{ service: { id: string } }>(
-      `query service($id: String!) {
-        service(id: $id) {
-          id
+  const data = await api.query<{
+    project: {
+      services: {
+        edges: Array<{ node: { id: string } }>;
+      };
+    };
+  }>(
+    `query project($id: String!) {
+      project(id: $id) {
+        services {
+          edges {
+            node {
+              id
+            }
+          }
         }
-      }`,
-      { id: serviceId },
-    );
-    return true;
-  } catch (error) {
-    if (error instanceof RailwayError) {
-      return false;
-    }
-    throw error;
-  }
+      }
+    }`,
+    { id: projectId },
+  );
+
+  return data.project.services.edges.some((e) => e.node.id === serviceId);
 }
 
 function isServiceAlreadyExistsError(error: unknown): boolean {
