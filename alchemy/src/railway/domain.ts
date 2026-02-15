@@ -161,7 +161,7 @@ export const Domain = Resource(
 
     const domainId = this.output?.domainId;
 
-    if (domainId && this.output) {
+    if (this.phase === "update" && domainId && this.output) {
       // Update — only targetPort can be updated via serviceInstanceUpdate
       if (
         props.targetPort !== undefined &&
