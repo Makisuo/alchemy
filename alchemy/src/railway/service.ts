@@ -290,11 +290,7 @@ export const Service = Resource(
 
     const serviceId = this.output?.serviceId;
 
-    if (
-      serviceId &&
-      this.output &&
-      (await serviceExists(api, projectId, serviceId))
-    ) {
+    if (serviceId && this.output) {
       // Source is immutable — replace if changed
       // Guard: if prevSource is undefined (old state format), skip comparison
       const prevSource = this.output.source;
@@ -922,34 +918,6 @@ async function findServiceByName(
   };
 }
 
-async function serviceExists(
-  api: RailwayApi,
-  projectId: string,
-  serviceId: string,
-): Promise<boolean> {
-  const data = await api.query<{
-    project: {
-      services: {
-        edges: Array<{ node: { id: string } }>;
-      };
-    };
-  }>(
-    `query project($id: String!) {
-      project(id: $id) {
-        services {
-          edges {
-            node {
-              id
-            }
-          }
-        }
-      }
-    }`,
-    { id: projectId },
-  );
-
-  return data.project.services.edges.some((e) => e.node.id === serviceId);
-}
 
 function isServiceAlreadyExistsError(error: unknown): boolean {
   if (!(error instanceof RailwayError)) {
