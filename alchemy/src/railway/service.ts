@@ -266,7 +266,11 @@ export const Service = Resource(
 
     const serviceId = this.output?.serviceId;
 
-    if (serviceId && this.output) {
+    if (
+      serviceId &&
+      this.output &&
+      (await serviceExists(api, serviceId))
+    ) {
       // Source is immutable — replace if changed
       // Guard: if prevSource is undefined (old state format), skip comparison
       const prevSource = this.output.source;
@@ -887,6 +891,28 @@ async function findServiceByName(
     createdAt: match.node.createdAt,
     updatedAt: match.node.updatedAt,
   };
+}
+
+async function serviceExists(
+  api: RailwayApi,
+  serviceId: string,
+): Promise<boolean> {
+  try {
+    await api.query<{ service: { id: string } }>(
+      `query service($id: String!) {
+        service(id: $id) {
+          id
+        }
+      }`,
+      { id: serviceId },
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof RailwayError) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 function isServiceAlreadyExistsError(error: unknown): boolean {
