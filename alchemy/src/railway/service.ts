@@ -1,6 +1,7 @@
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { RailwayApi, type RailwayApiOptions } from "./api.ts";
+import { runRailwayDeleteMutation } from "./delete-retry.ts";
 import type { Environment } from "./environment.ts";
 import type { Project } from "./project.ts";
 
@@ -192,19 +193,16 @@ export const Service = Resource(
     }
 
     if (this.phase === "delete") {
-      if (this.output?.serviceId) {
-        try {
-          await api.query(
+      const serviceId = this.output?.serviceId;
+      if (serviceId) {
+        await runRailwayDeleteMutation(() =>
+          api.query(
             `mutation serviceDelete($id: String!) {
               serviceDelete(id: $id)
             }`,
-            { id: this.output.serviceId },
-          );
-        } catch (error: any) {
-          if (!error.message?.includes("not found")) {
-            throw error;
-          }
-        }
+            { id: serviceId },
+          ),
+        );
       }
       return this.destroy();
     }

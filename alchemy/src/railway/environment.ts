@@ -1,6 +1,7 @@
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { RailwayApi, type RailwayApiOptions } from "./api.ts";
+import { runRailwayDeleteMutation } from "./delete-retry.ts";
 import type { Project } from "./project.ts";
 
 /**
@@ -107,19 +108,16 @@ export const Environment = Resource(
       props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
 
     if (this.phase === "delete") {
-      if (this.output?.environmentId) {
-        try {
-          await api.query(
+      const environmentId = this.output?.environmentId;
+      if (environmentId) {
+        await runRailwayDeleteMutation(() =>
+          api.query(
             `mutation environmentDelete($id: String!) {
               environmentDelete(id: $id)
             }`,
-            { id: this.output.environmentId },
-          );
-        } catch (error: any) {
-          if (!error.message?.includes("not found")) {
-            throw error;
-          }
-        }
+            { id: environmentId },
+          ),
+        );
       }
       return this.destroy();
     }

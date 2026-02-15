@@ -1,6 +1,7 @@
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { RailwayApi, type RailwayApiOptions } from "./api.ts";
+import { runRailwayDeleteMutation } from "./delete-retry.ts";
 import type { Environment } from "./environment.ts";
 import type { Service } from "./service.ts";
 
@@ -114,19 +115,16 @@ export const TCPProxy = Resource(
         : props.environment.environmentId;
 
     if (this.phase === "delete") {
-      if (this.output?.proxyId) {
-        try {
-          await api.query(
+      const proxyId = this.output?.proxyId;
+      if (proxyId) {
+        await runRailwayDeleteMutation(() =>
+          api.query(
             `mutation tcpProxyDelete($id: String!) {
               tcpProxyDelete(id: $id)
             }`,
-            { id: this.output.proxyId },
-          );
-        } catch (error: any) {
-          if (!error.message?.includes("not found")) {
-            throw error;
-          }
-        }
+            { id: proxyId },
+          ),
+        );
       }
       return this.destroy();
     }

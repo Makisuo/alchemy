@@ -1,6 +1,7 @@
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { RailwayApi, type RailwayApiOptions } from "./api.ts";
+import { runRailwayDeleteMutation } from "./delete-retry.ts";
 
 /**
  * Properties for creating or updating a Railway Project
@@ -125,20 +126,16 @@ export const Project = Resource(
     const adopt = props.adopt ?? this.scope.adopt;
 
     if (this.phase === "delete") {
-      if (props.delete !== false && this.output?.projectId) {
-        try {
-          await api.query(
+      const projectId = this.output?.projectId;
+      if (props.delete !== false && projectId) {
+        await runRailwayDeleteMutation(() =>
+          api.query(
             `mutation projectDelete($id: String!) {
               projectDelete(id: $id)
             }`,
-            { id: this.output.projectId },
-          );
-        } catch (error: any) {
-          // Ignore not found errors
-          if (!error.message?.includes("not found")) {
-            throw error;
-          }
-        }
+            { id: projectId },
+          ),
+        );
       }
       return this.destroy();
     }

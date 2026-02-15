@@ -2,6 +2,7 @@ import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { Secret } from "../secret.ts";
 import { RailwayApi, type RailwayApiOptions } from "./api.ts";
+import { runRailwayDeleteMutation } from "./delete-retry.ts";
 import type { Environment } from "./environment.ts";
 import type { Project } from "./project.ts";
 import type { Service } from "./service.ts";
@@ -129,8 +130,8 @@ export const Variable = Resource(
       // Delete all tracked keys
       const keys = this.output?.keys ?? [];
       for (const key of keys) {
-        try {
-          await api.query(
+        await runRailwayDeleteMutation(() =>
+          api.query(
             `mutation variableDelete($input: VariableDeleteInput!) {
               variableDelete(input: $input)
             }`,
@@ -142,12 +143,8 @@ export const Variable = Resource(
                 name: key,
               },
             },
-          );
-        } catch (error: any) {
-          if (!error.message?.includes("not found")) {
-            throw error;
-          }
-        }
+          ),
+        );
       }
       return this.destroy();
     }
@@ -163,18 +160,20 @@ export const Variable = Resource(
       const newKeys = new Set(Object.keys(props.variables));
       const removedKeys = this.output.keys.filter((k) => !newKeys.has(k));
       for (const key of removedKeys) {
-        await api.query(
-          `mutation variableDelete($input: VariableDeleteInput!) {
-            variableDelete(input: $input)
-          }`,
-          {
-            input: {
-              projectId,
-              environmentId,
-              serviceId,
-              name: key,
+        await runRailwayDeleteMutation(() =>
+          api.query(
+            `mutation variableDelete($input: VariableDeleteInput!) {
+              variableDelete(input: $input)
+            }`,
+            {
+              input: {
+                projectId,
+                environmentId,
+                serviceId,
+                name: key,
+              },
             },
-          },
+          ),
         );
       }
     }
