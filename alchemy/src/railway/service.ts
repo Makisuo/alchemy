@@ -279,18 +279,20 @@ export const Service = Resource(
         return this.replace();
       }
 
-      // Update service name
-      await api.query(
-        `mutation serviceUpdate($id: String!, $input: ServiceUpdateInput!) {
-          serviceUpdate(id: $id, input: $input) {
-            id
-          }
-        }`,
-        {
-          id: serviceId,
-          input: { name },
-        },
-      );
+      // Update service name only if changed
+      if (name !== this.output.name) {
+        await api.query(
+          `mutation serviceUpdate($id: String!, $input: ServiceUpdateInput!) {
+            serviceUpdate(id: $id, input: $input) {
+              id
+            }
+          }`,
+          {
+            id: serviceId,
+            input: { name },
+          },
+        );
+      }
 
       // Update service instance config
       await updateServiceInstance(api, serviceId, environmentId, props);
