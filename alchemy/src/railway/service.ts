@@ -268,11 +268,13 @@ export const Service = Resource(
 
     if (serviceId && this.output) {
       // Source is immutable — replace if changed
+      // Guard: if prevSource is undefined (old state format), skip comparison
       const prevSource = this.output.source;
       if (
+        prevSource &&
         props.source &&
-        (props.source.repo !== prevSource?.repo ||
-          props.source.image !== prevSource?.image)
+        (props.source.repo !== prevSource.repo ||
+          props.source.image !== prevSource.image)
       ) {
         return this.replace();
       }
