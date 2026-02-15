@@ -125,7 +125,7 @@ export interface ServiceProps extends RailwayApiOptions {
  */
 export type Service = Omit<
   ServiceProps,
-  "adopt" | "project" | "environment" | "source" | "deploymentTrigger"
+  "adopt" | "project" | "environment" | "deploymentTrigger"
 > & {
   /**
    * The Railway service ID
@@ -267,6 +267,16 @@ export const Service = Resource(
     const serviceId = this.output?.serviceId;
 
     if (serviceId && this.output) {
+      // Source is immutable — replace if changed
+      const prevSource = this.output.source;
+      if (
+        props.source &&
+        (props.source.repo !== prevSource?.repo ||
+          props.source.image !== prevSource?.image)
+      ) {
+        return this.replace();
+      }
+
       // Update service name
       await api.query(
         `mutation serviceUpdate($id: String!, $input: ServiceUpdateInput!) {
@@ -304,6 +314,7 @@ export const Service = Resource(
         createdAt: this.output.createdAt,
         updatedAt: this.output.updatedAt,
         name,
+        source: props.source,
         buildCommand: props.buildCommand,
         startCommand: props.startCommand,
         healthcheckPath: props.healthcheckPath,
@@ -340,6 +351,7 @@ export const Service = Resource(
         return {
           ...existing,
           environmentId,
+          source: props.source,
           buildCommand: props.buildCommand,
           startCommand: props.startCommand,
           healthcheckPath: props.healthcheckPath,
@@ -400,6 +412,7 @@ export const Service = Resource(
       projectId,
       environmentId,
       name: service.name,
+      source: props.source,
       buildCommand: props.buildCommand,
       startCommand: props.startCommand,
       healthcheckPath: props.healthcheckPath,
