@@ -18,12 +18,13 @@ describe.skipIf(skipIfNoToken)("Railway Service", () => {
 
   test("create, update, and delete service", async (scope) => {
     let project: Project | undefined;
+    let service: Service | undefined;
     try {
       project = await Project(`${testId}-proj`, {
         name: `${testId}-proj`,
       });
 
-      let service = await Service(testId, {
+      service = await Service(testId, {
         project,
         name: `${testId}-svc`,
         startCommand: "node index.js",
@@ -47,7 +48,12 @@ describe.skipIf(skipIfNoToken)("Railway Service", () => {
       expect(service.startCommand).toEqual("npm start");
       expect(service.buildCommand).toEqual("npm run build");
     } finally {
+      const serviceId = service?.serviceId;
       await destroy(scope);
+
+      if (serviceId) {
+        await assertServiceDoesNotExist(serviceId);
+      }
 
       if (project?.projectId) {
         const api = new RailwayApi();
@@ -65,3 +71,18 @@ describe.skipIf(skipIfNoToken)("Railway Service", () => {
     }
   });
 });
+
+async function assertServiceDoesNotExist(serviceId: string): Promise<void> {
+  const api = new RailwayApi();
+  try {
+    await api.query(
+      `query service($id: String!) {
+        service(id: $id) { id }
+      }`,
+      { id: serviceId },
+    );
+    expect.fail("Service should have been deleted");
+  } catch {
+    // Expected: service not found
+  }
+}

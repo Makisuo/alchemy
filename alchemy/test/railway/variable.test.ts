@@ -19,18 +19,20 @@ describe.skipIf(skipIfNoToken)("Railway Variable", () => {
 
   test("create, update, and delete variables", async (scope) => {
     let project: Project | undefined;
+    let service: Service | undefined;
+    let vars: Variable | undefined;
     try {
       project = await Project(`${testId}-proj`, {
         name: `${testId}-proj`,
       });
 
-      const service = await Service(`${testId}-svc`, {
+      service = await Service(`${testId}-svc`, {
         project,
         name: `${testId}-svc`,
       });
 
       // Create
-      let vars = await Variable(testId, {
+      vars = await Variable(testId, {
         project,
         environment: project.defaultEnvironmentId,
         service,
@@ -62,6 +64,14 @@ describe.skipIf(skipIfNoToken)("Railway Variable", () => {
     } finally {
       await destroy(scope);
 
+      if (service?.serviceId && project) {
+        await assertVariablesDoNotExist(
+          project.projectId,
+          project.defaultEnvironmentId,
+          service.serviceId,
+        );
+      }
+
       if (project?.projectId) {
         const api = new RailwayApi();
         try {
@@ -78,3 +88,25 @@ describe.skipIf(skipIfNoToken)("Railway Variable", () => {
     }
   });
 });
+
+async function assertVariablesDoNotExist(
+  projectId: string,
+  environmentId: string,
+  serviceId: string,
+): Promise<void> {
+  const api = new RailwayApi();
+  try {
+    const data = await api.query<{
+      variables: Record<string, string>;
+    }>(
+      `query variables($projectId: String!, $environmentId: String!, $serviceId: String!) {
+        variables(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId)
+      }`,
+      { projectId, environmentId, serviceId },
+    );
+    // After deletion, either the query fails or returns empty
+    expect(Object.keys(data.variables)).toHaveLength(0);
+  } catch {
+    // Expected: service/project not found after deletion
+  }
+}

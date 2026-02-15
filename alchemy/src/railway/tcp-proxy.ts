@@ -104,7 +104,6 @@ export const TCPProxy = Resource(
     id: string,
     props: TCPProxyProps,
   ): Promise<TCPProxy> {
-    const api = new RailwayApi(props);
     const serviceId =
       typeof props.service === "string"
         ? props.service
@@ -113,6 +112,22 @@ export const TCPProxy = Resource(
       typeof props.environment === "string"
         ? props.environment
         : props.environment.environmentId;
+
+    if (this.scope.local) {
+      if (this.phase === "delete") {
+        return this.destroy();
+      }
+      return {
+        proxyId: this.output?.proxyId ?? "",
+        serviceId,
+        environmentId,
+        applicationPort: props.applicationPort,
+        domain: this.output?.domain ?? "local.railway.internal",
+        proxyPort: this.output?.proxyPort ?? props.applicationPort,
+      };
+    }
+
+    const api = new RailwayApi(props);
 
     if (this.phase === "delete") {
       const proxyId = this.output?.proxyId;

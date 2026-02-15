@@ -111,7 +111,6 @@ export const Variable = Resource(
     id: string,
     props: VariableProps,
   ): Promise<Variable> {
-    const api = new RailwayApi(props);
     const projectId =
       typeof props.project === "string"
         ? props.project
@@ -125,6 +124,21 @@ export const Variable = Resource(
         ? props.service
         : props.service.serviceId
       : undefined;
+
+    if (this.scope.local) {
+      if (this.phase === "delete") {
+        return this.destroy();
+      }
+      return {
+        projectId,
+        environmentId,
+        serviceId,
+        variables: props.variables,
+        keys: Object.keys(props.variables),
+      };
+    }
+
+    const api = new RailwayApi(props);
 
     if (this.phase === "delete") {
       // Delete all tracked keys

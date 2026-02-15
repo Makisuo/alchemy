@@ -99,13 +99,27 @@ export const Environment = Resource(
     id: string,
     props: EnvironmentProps,
   ): Promise<Environment> {
-    const api = new RailwayApi(props);
     const projectId =
       typeof props.project === "string"
         ? props.project
         : props.project.projectId;
     const name =
       props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
+
+    if (this.scope.local) {
+      if (this.phase === "delete") {
+        return this.destroy();
+      }
+      return {
+        environmentId: this.output?.environmentId ?? "",
+        projectId,
+        name,
+        createdAt: this.output?.createdAt ?? new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    const api = new RailwayApi(props);
 
     if (this.phase === "delete") {
       const environmentId = this.output?.environmentId;

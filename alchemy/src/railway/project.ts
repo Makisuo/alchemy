@@ -120,10 +120,25 @@ export const Project = Resource(
     id: string,
     props: ProjectProps,
   ): Promise<Project> {
-    const api = new RailwayApi(props);
     const name =
       props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
     const adopt = props.adopt ?? this.scope.adopt;
+
+    if (this.scope.local) {
+      if (this.phase === "delete") {
+        return this.destroy();
+      }
+      return {
+        projectId: this.output?.projectId ?? "",
+        name,
+        description: props.description,
+        defaultEnvironmentId: this.output?.defaultEnvironmentId ?? "",
+        createdAt: this.output?.createdAt ?? new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    const api = new RailwayApi(props);
 
     if (this.phase === "delete") {
       const projectId = this.output?.projectId;

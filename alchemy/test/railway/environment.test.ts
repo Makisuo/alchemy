@@ -16,14 +16,15 @@ const skipIfNoToken = !process.env.RAILWAY_API_TOKEN;
 describe.skipIf(skipIfNoToken)("Railway Environment", () => {
   const testId = `${BRANCH_PREFIX}-railway-env`;
 
-  test("create and delete environment", async (scope) => {
+  test("create, replace, and delete environment", async (scope) => {
     let project: Project | undefined;
+    let env: Environment | undefined;
     try {
       project = await Project(`${testId}-proj`, {
         name: `${testId}-proj`,
       });
 
-      const env = await Environment(testId, {
+      env = await Environment(testId, {
         project,
         name: `${testId}-staging`,
       });
@@ -32,8 +33,24 @@ describe.skipIf(skipIfNoToken)("Railway Environment", () => {
       expect(env.name).toEqual(`${testId}-staging`);
       expect(env.projectId).toEqual(project.projectId);
       expect(env.createdAt).toBeTruthy();
+
+      const originalEnvId = env.environmentId;
+
+      // Replace — name is immutable
+      env = await Environment(testId, {
+        project,
+        name: `${testId}-staging-v2`,
+      });
+
+      expect(env.environmentId).toBeTruthy();
+      expect(env.environmentId).not.toEqual(originalEnvId);
+      expect(env.name).toEqual(`${testId}-staging-v2`);
     } finally {
       await destroy(scope);
+
+      if (env?.environmentId) {
+        await assertEnvironmentDoesNotExist(env.environmentId);
+      }
 
       if (project?.projectId) {
         const api = new RailwayApi();
@@ -51,3 +68,20 @@ describe.skipIf(skipIfNoToken)("Railway Environment", () => {
     }
   });
 });
+
+async function assertEnvironmentDoesNotExist(
+  environmentId: string,
+): Promise<void> {
+  const api = new RailwayApi();
+  try {
+    await api.query(
+      `query environment($id: String!) {
+        environment(id: $id) { id }
+      }`,
+      { id: environmentId },
+    );
+    expect.fail("Environment should have been deleted");
+  } catch {
+    // Expected: environment not found
+  }
+}

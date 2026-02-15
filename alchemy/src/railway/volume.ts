@@ -129,7 +129,6 @@ export const Volume = Resource(
     id: string,
     props: VolumeProps,
   ): Promise<Volume> {
-    const api = new RailwayApi(props);
     const projectId =
       typeof props.project === "string"
         ? props.project
@@ -144,6 +143,22 @@ export const Volume = Resource(
         : props.environment.environmentId;
     const name =
       props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
+
+    if (this.scope.local) {
+      if (this.phase === "delete") {
+        return this.destroy();
+      }
+      return {
+        volumeId: this.output?.volumeId ?? "",
+        projectId,
+        serviceId,
+        environmentId,
+        name,
+        mountPath: props.mountPath,
+      };
+    }
+
+    const api = new RailwayApi(props);
 
     if (this.phase === "delete") {
       const volumeId = this.output?.volumeId;

@@ -114,7 +114,6 @@ export const Domain = Resource(
     id: string,
     props: DomainProps,
   ): Promise<Domain> {
-    const api = new RailwayApi(props);
     const serviceId =
       typeof props.service === "string"
         ? props.service
@@ -123,6 +122,21 @@ export const Domain = Resource(
       typeof props.environment === "string"
         ? props.environment
         : props.environment.environmentId;
+
+    if (this.scope.local) {
+      if (this.phase === "delete") {
+        return this.destroy();
+      }
+      return {
+        domainId: this.output?.domainId ?? "",
+        serviceId,
+        environmentId,
+        domain: props.domain ?? this.output?.domain ?? "local.up.railway.app",
+        targetPort: props.targetPort,
+      };
+    }
+
+    const api = new RailwayApi(props);
 
     if (this.phase === "delete") {
       const domainId = this.output?.domainId;

@@ -226,7 +226,6 @@ export const Service = Resource(
     id: string,
     props: ServiceProps,
   ): Promise<Service> {
-    const api = new RailwayApi(props);
     const projectId =
       typeof props.project === "string"
         ? props.project
@@ -235,15 +234,40 @@ export const Service = Resource(
       props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
     const desiredDeploymentTrigger = resolveDesiredDeploymentTrigger(props);
 
-    // Resolve environment ID
+    // Resolve environment ID (without API call for local mode)
+    const resolvedEnvironmentId = props.environment
+      ? typeof props.environment === "string"
+        ? props.environment
+        : props.environment.environmentId
+      : this.output?.environmentId;
+
+    if (this.scope.local) {
+      if (this.phase === "delete") {
+        return this.destroy();
+      }
+      return {
+        serviceId: this.output?.serviceId ?? "",
+        projectId,
+        environmentId: resolvedEnvironmentId ?? "",
+        name,
+        source: props.source,
+        buildCommand: props.buildCommand,
+        startCommand: props.startCommand,
+        healthcheckPath: props.healthcheckPath,
+        numReplicas: props.numReplicas,
+        cronSchedule: props.cronSchedule,
+        region: props.region,
+        createdAt: this.output?.createdAt ?? new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    const api = new RailwayApi(props);
+
+    // Resolve environment ID via API if not provided
     let environmentId: string;
-    if (props.environment) {
-      environmentId =
-        typeof props.environment === "string"
-          ? props.environment
-          : props.environment.environmentId;
-    } else if (this.output?.environmentId) {
-      environmentId = this.output.environmentId;
+    if (resolvedEnvironmentId) {
+      environmentId = resolvedEnvironmentId;
     } else {
       // Get the default production environment
       environmentId = await getDefaultEnvironmentId(api, projectId);
@@ -284,11 +308,15 @@ export const Service = Resource(
       }
 
       // Update service name only if changed
+      let updatedAt = this.output.updatedAt;
       if (name !== this.output.name) {
-        await api.query(
+        const data = await api.query<{
+          serviceUpdate: { id: string; updatedAt: string };
+        }>(
           `mutation serviceUpdate($id: String!, $input: ServiceUpdateInput!) {
             serviceUpdate(id: $id, input: $input) {
               id
+              updatedAt
             }
           }`,
           {
@@ -296,6 +324,7 @@ export const Service = Resource(
             input: { name },
           },
         );
+        updatedAt = data.serviceUpdate.updatedAt;
       }
 
       // Update service instance config
@@ -320,7 +349,7 @@ export const Service = Resource(
         projectId: this.output.projectId,
         environmentId: this.output.environmentId,
         createdAt: this.output.createdAt,
-        updatedAt: this.output.updatedAt,
+        updatedAt,
         name,
         source: props.source,
         buildCommand: props.buildCommand,
@@ -926,7 +955,5 @@ function isServiceAlreadyExistsError(error: unknown): boolean {
   if (!(error instanceof RailwayError)) {
     return false;
   }
-  return error.errors.some((e) =>
-    /already exists/i.test(e.message),
-  );
+  return error.errors.some((e) => /already exists/i.test(e.message));
 }

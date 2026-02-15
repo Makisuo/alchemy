@@ -19,6 +19,7 @@ describe.skipIf(skipIfNoToken)("Railway Domain", () => {
 
   test("create and delete railway domain", async (scope) => {
     let project: Project | undefined;
+    let domain: Domain | undefined;
     try {
       project = await Project(`${testId}-proj`, {
         name: `${testId}-proj`,
@@ -30,7 +31,7 @@ describe.skipIf(skipIfNoToken)("Railway Domain", () => {
         source: { image: "nginx:latest" },
       });
 
-      const domain = await Domain(testId, {
+      domain = await Domain(testId, {
         service,
         environment: project.defaultEnvironmentId,
       });
@@ -42,6 +43,10 @@ describe.skipIf(skipIfNoToken)("Railway Domain", () => {
       expect(domain.environmentId).toEqual(project.defaultEnvironmentId);
     } finally {
       await destroy(scope);
+
+      if (domain?.domainId) {
+        await assertDomainDoesNotExist(domain.domainId);
+      }
 
       if (project?.projectId) {
         const api = new RailwayApi();
@@ -59,3 +64,18 @@ describe.skipIf(skipIfNoToken)("Railway Domain", () => {
     }
   });
 });
+
+async function assertDomainDoesNotExist(domainId: string): Promise<void> {
+  const api = new RailwayApi();
+  try {
+    await api.query(
+      `query domain($id: String!) {
+        domain(id: $id) { id }
+      }`,
+      { id: domainId },
+    );
+    expect.fail("Domain should have been deleted");
+  } catch {
+    // Expected: domain not found
+  }
+}

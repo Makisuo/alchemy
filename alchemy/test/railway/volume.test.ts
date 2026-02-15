@@ -17,8 +17,9 @@ const skipIfNoToken = !process.env.RAILWAY_API_TOKEN;
 describe.skipIf(skipIfNoToken)("Railway Volume", () => {
   const testId = `${BRANCH_PREFIX}-railway-vol`;
 
-  test("create and delete volume", async (scope) => {
+  test("create, replace, and delete volume", async (scope) => {
     let project: Project | undefined;
+    let volume: Volume | undefined;
     try {
       project = await Project(`${testId}-proj`, {
         name: `${testId}-proj`,
@@ -29,7 +30,7 @@ describe.skipIf(skipIfNoToken)("Railway Volume", () => {
         name: `${testId}-svc`,
       });
 
-      const volume = await Volume(testId, {
+      volume = await Volume(testId, {
         project,
         service,
         environment: project.defaultEnvironmentId,
@@ -40,8 +41,26 @@ describe.skipIf(skipIfNoToken)("Railway Volume", () => {
       expect(volume.mountPath).toEqual("/data");
       expect(volume.projectId).toEqual(project.projectId);
       expect(volume.serviceId).toEqual(service.serviceId);
+
+      const originalVolumeId = volume.volumeId;
+
+      // Replace — mountPath is immutable
+      volume = await Volume(testId, {
+        project,
+        service,
+        environment: project.defaultEnvironmentId,
+        mountPath: "/data/v2",
+      });
+
+      expect(volume.volumeId).toBeTruthy();
+      expect(volume.volumeId).not.toEqual(originalVolumeId);
+      expect(volume.mountPath).toEqual("/data/v2");
     } finally {
       await destroy(scope);
+
+      if (volume?.volumeId) {
+        await assertVolumeDoesNotExist(volume.volumeId);
+      }
 
       if (project?.projectId) {
         const api = new RailwayApi();
@@ -59,3 +78,18 @@ describe.skipIf(skipIfNoToken)("Railway Volume", () => {
     }
   });
 });
+
+async function assertVolumeDoesNotExist(volumeId: string): Promise<void> {
+  const api = new RailwayApi();
+  try {
+    await api.query(
+      `query volume($id: String!) {
+        volume(id: $id) { id }
+      }`,
+      { id: volumeId },
+    );
+    expect.fail("Volume should have been deleted");
+  } catch {
+    // Expected: volume not found
+  }
+}
