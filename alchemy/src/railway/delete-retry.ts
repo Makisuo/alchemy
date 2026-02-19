@@ -23,7 +23,10 @@ function getErrorMessages(error: unknown): string[] {
   return [String(error)];
 }
 
-function hasAnyPattern(error: unknown, patterns: readonly string[]): boolean {
+export function hasRailwayErrorPattern(
+  error: unknown,
+  patterns: readonly string[],
+): boolean {
   const messages = getErrorMessages(error).map((message) =>
     message.toLowerCase(),
   );
@@ -33,11 +36,11 @@ function hasAnyPattern(error: unknown, patterns: readonly string[]): boolean {
 }
 
 export function isRailwayNotFoundError(error: unknown): boolean {
-  return hasAnyPattern(error, NOT_FOUND_PATTERNS);
+  return hasRailwayErrorPattern(error, NOT_FOUND_PATTERNS);
 }
 
 export function isRailwayOperationInProgressError(error: unknown): boolean {
-  return hasAnyPattern(error, OPERATION_IN_PROGRESS_PATTERNS);
+  return hasRailwayErrorPattern(error, OPERATION_IN_PROGRESS_PATTERNS);
 }
 
 export async function runRailwayDeleteMutation(

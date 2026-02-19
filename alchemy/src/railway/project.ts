@@ -1,7 +1,11 @@
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
+import { withExponentialBackoff } from "../util/retry.ts";
 import { RailwayApi, type RailwayApiOptions } from "./api.ts";
-import { runRailwayDeleteMutation } from "./delete-retry.ts";
+import {
+  hasRailwayErrorPattern,
+  runRailwayDeleteMutation,
+} from "./delete-retry.ts";
 
 /**
  * Properties for creating or updating a Railway Project
@@ -155,9 +159,7 @@ export const Project = Resource(
       return this.destroy();
     }
 
-    const projectId = this.output?.projectId;
-
-    if (projectId && this.output) {
+    if (this.output?.projectId) {
       // Update
       const data = await api.query<{
         projectUpdate: {
@@ -176,7 +178,7 @@ export const Project = Resource(
           }
         }`,
         {
-          id: projectId,
+          id: this.output.projectId,
           input: {
             name,
             description: props.description ?? null,
@@ -195,54 +197,22 @@ export const Project = Resource(
     }
 
     // Create
+
+    let project: ProjectFragment | undefined;
+
     if (adopt) {
-      const existing = await findProjectByName(api, name);
-      if (existing) {
-        return existing;
-      }
+      project = await findProjectByName(api, name);
     }
 
-    const workspaceId = await resolveWorkspaceId(api, props.workspaceId);
+    if (!project) {
+      const workspaceId = await resolveWorkspaceId(api, props.workspaceId);
+      project = await createProject(api, {
+        name,
+        description: props.description,
+        workspaceId,
+      });
+    }
 
-    const data = await api.query<{
-      projectCreate: {
-        id: string;
-        name: string;
-        description: string;
-        createdAt: string;
-        updatedAt: string;
-        environments: {
-          edges: Array<{ node: { id: string; name: string } }>;
-        };
-      };
-    }>(
-      `mutation projectCreate($input: ProjectCreateInput!) {
-        projectCreate(input: $input) {
-          id
-          name
-          description
-          createdAt
-          updatedAt
-          environments {
-            edges {
-              node {
-                id
-                name
-              }
-            }
-          }
-        }
-      }`,
-      {
-        input: {
-          name,
-          description: props.description,
-          workspaceId,
-        },
-      },
-    );
-
-    const project = data.projectCreate;
     const defaultEnv = project.environments.edges.find(
       (e) => e.node.name === "production",
     );
@@ -259,23 +229,41 @@ export const Project = Resource(
   },
 );
 
+const PROJECT_FRAGMENT = `
+  id
+  name
+  description
+  createdAt
+  updatedAt
+  environments {
+    edges {
+      node {
+        id
+        name
+      }
+    }
+  }
+`;
+
+interface ProjectFragment {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+  environments: {
+    edges: Array<{ node: { id: string; name: string } }>;
+  };
+}
+
 async function findProjectByName(
   api: RailwayApi,
   name: string,
-): Promise<Project | undefined> {
+): Promise<ProjectFragment | undefined> {
   const data = await api.query<{
     projects: {
       edges: Array<{
-        node: {
-          id: string;
-          name: string;
-          description: string;
-          createdAt: string;
-          updatedAt: string;
-          environments: {
-            edges: Array<{ node: { id: string; name: string } }>;
-          };
-        };
+        node: ProjectFragment;
       }>;
     };
   }>(
@@ -283,42 +271,38 @@ async function findProjectByName(
       projects {
         edges {
           node {
-            id
-            name
-            description
-            createdAt
-            updatedAt
-            environments {
-              edges {
-                node {
-                  id
-                  name
-                }
-              }
-            }
+            ${PROJECT_FRAGMENT}
           }
         }
       }
     }`,
   );
+  return data.projects.edges.find((e) => e.node.name === name)?.node;
+}
 
-  const match = data.projects.edges.find((e) => e.node.name === name);
-  if (!match) return undefined;
-
-  const project = match.node;
-  const defaultEnv = project.environments.edges.find(
-    (e) => e.node.name === "production",
+async function createProject(
+  api: RailwayApi,
+  input: { name: string; description: string | undefined; workspaceId: string },
+): Promise<ProjectFragment> {
+  return await withExponentialBackoff(
+    async () => {
+      const data = await api.query<{
+        projectCreate: ProjectFragment;
+      }>(
+        `mutation projectCreate($input: ProjectCreateInput!) {
+    projectCreate(input: $input) {
+      ${PROJECT_FRAGMENT}
+    }
+  }`,
+        { input },
+      );
+      return data.projectCreate;
+    },
+    // handle "Whoa there pal! Only one project can be created per user every 30s. Try again in a sec"
+    (error) => hasRailwayErrorPattern(error, ["try again in a sec"]),
+    10,
+    5000,
   );
-
-  return {
-    projectId: project.id,
-    name: project.name,
-    description: project.description,
-    defaultEnvironmentId:
-      defaultEnv?.node.id ?? project.environments.edges[0]?.node.id ?? "",
-    createdAt: project.createdAt,
-    updatedAt: project.updatedAt,
-  };
 }
 
 async function resolveWorkspaceId(
