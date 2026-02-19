@@ -3,8 +3,8 @@ import { alchemy } from "../../src/alchemy.ts";
 import { destroy } from "../../src/destroy.ts";
 import { RailwayApi } from "../../src/railway/api.ts";
 import { Project } from "../../src/railway/project.ts";
-import { BRANCH_PREFIX } from "../util.ts";
 import "../../src/test/vitest.ts";
+import { BRANCH_PREFIX } from "../util.ts";
 
 const test = alchemy.test(import.meta, {
   prefix: BRANCH_PREFIX,
@@ -13,7 +13,7 @@ const test = alchemy.test(import.meta, {
 const skipIfNoToken = !process.env.RAILWAY_API_TOKEN;
 
 describe.skipIf(skipIfNoToken)("Railway Project", () => {
-  const testId = `${BRANCH_PREFIX}-railway-project`;
+  const testId = `${BRANCH_PREFIX}-project`;
 
   test("create, update, and delete project", async (scope) => {
     let project: Project | undefined;
