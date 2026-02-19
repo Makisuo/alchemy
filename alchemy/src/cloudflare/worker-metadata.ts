@@ -626,6 +626,13 @@ export async function prepareWorkerMetadata(
         namespace_id: binding.namespace_id.toString(),
         simple: binding.simple,
       });
+    } else if (binding.type === "vpc_service") {
+      meta.bindings.push({
+        type: "vpc_service",
+        name: bindingName,
+        service_name: binding.name,
+        service_id: binding.serviceId,
+      });
     } else {
       assertNever(
         binding,

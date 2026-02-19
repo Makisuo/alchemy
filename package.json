@@ -41,7 +41,7 @@
     "download:env": "doppler secrets download --no-file --format env > .env",
     "test": "vitest run",
     "test:all": "ALL_TESTS=1 vitest run",
-    "test:fast": "vitest run --exclude ./alchemy/test/create.test.ts --exclude ./alchemy/test/smoke.test.ts --exclude ./alchemy/test/init.test.ts",
+    "test:fast": "vitest run --exclude ./alchemy/test/create.test.ts --exclude ./alchemy/test/smoke.test.ts --exclude ./alchemy/test/init.test.ts --exclude ./alchemy/test/aws",
     "test:smoke": "bun ./alchemy/test/smoke.ts",
     "test:examples": "bun test:smoke -t cloudflare",
     "test:create": "bun test:smoke -t template",

@@ -29,7 +29,7 @@
     },
     "alchemy": {
       "name": "alchemy",
-      "version": "0.84.0",
+      "version": "0.85.1",
       "bin": {
         "alchemy": "bin/alchemy.js",
       },
@@ -415,6 +415,13 @@
         "alchemy": "workspace:*",
       },
     },
+    "examples/cloudflare-ai-search": {
+      "name": "cloudflare-ai-search",
+      "devDependencies": {
+        "@cloudflare/workers-types": "catalog:",
+        "alchemy": "workspace:*",
+      },
+    },
     "examples/cloudflare-astro": {
       "name": "astro-project",
       "version": "0.0.0",
@@ -721,6 +728,12 @@
         "typescript": "catalog:",
         "typescript-eslint": "^8.24.1",
         "vite": "catalog:",
+      },
+    },
+    "examples/cloudflare-vpc-service": {
+      "name": "cloudflare-vpc-service",
+      "dependencies": {
+        "alchemy": "workspace:*",
       },
     },
     "examples/cloudflare-worker": {
@@ -2988,6 +3001,8 @@
 
     "cloudflare": ["cloudflare@5.2.0", "", { "dependencies": { "@types/node": "^18.11.18", "@types/node-fetch": "^2.6.4", "abort-controller": "^3.0.0", "agentkeepalive": "^4.2.1", "form-data-encoder": "1.7.2", "formdata-node": "^4.3.2", "node-fetch": "^2.6.7" } }, "sha512-dVzqDpPFYR9ApEC9e+JJshFJZXcw4HzM8W+3DHzO5oy9+8rLC53G7x6fEf9A7/gSuSCxuvndzui5qJKftfIM9A=="],
 
+    "cloudflare-ai-search": ["cloudflare-ai-search@workspace:examples/cloudflare-ai-search"],
+
     "cloudflare-container": ["cloudflare-container@workspace:examples/cloudflare-container"],
 
     "cloudflare-durable-object-websocket": ["cloudflare-durable-object-websocket@workspace:examples/cloudflare-durable-object-websocket"],
@@ -3003,6 +3018,8 @@
     "cloudflare-sveltekit": ["cloudflare-sveltekit@workspace:examples/cloudflare-sveltekit"],
 
     "cloudflare-vite-container": ["cloudflare-vite-container@workspace:examples/cloudflare-vite-container"],
+
+    "cloudflare-vpc-service": ["cloudflare-vpc-service@workspace:examples/cloudflare-vpc-service"],
 
     "cloudflare-worker": ["cloudflare-worker@workspace:examples/cloudflare-worker"],
 

@@ -967,7 +967,7 @@ export default {
       // so previews should be enabled
       const clientSubdomain = await getWorkerSubdomain(api, clientWorkerName);
       expect(clientSubdomain.enabled).toEqual(true);
-      expect(clientSubdomain.previews_enabled).toEqual(false);
+      expect(clientSubdomain.previews_enabled).toEqual(true);
 
       // Verify both workers respond
       const providerResponse = await fetchAndExpectOK(doProvider.url!);

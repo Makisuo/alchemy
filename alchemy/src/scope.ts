@@ -342,12 +342,21 @@ export class Scope {
     return state !== undefined && (type === undefined || state.kind === type);
   }
 
-  public createPhysicalName(id: string, delimiter = "-"): string {
-    const app = this.appName;
-    const stage = this.stage;
-    return [app, ...this.chain.slice(2), id, stage]
-      .map((s) => s.replaceAll(/[^a-z0-9_-]/gi, delimiter))
+  public createPhysicalName(
+    id: string,
+    delimiter = "-",
+    maxLength?: number,
+  ): string {
+    let name = [this.appName, ...this.chain.slice(2), id, this.stage]
+      .map((part) => part.replaceAll(/[^a-z0-9_-]/gi, delimiter))
       .join(delimiter);
+    while (maxLength && name.length > maxLength) {
+      name = name
+        .split(delimiter)
+        .map((part) => part.slice(0, -1))
+        .join(delimiter);
+    }
+    return name;
   }
 
   public async spawn<
