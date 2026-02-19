@@ -1,3 +1,5 @@
+import type { CloudflareApiErrorPayload } from "./api-response";
+
 /**
  * Custom error class for Cloudflare API errors
  * Includes HTTP status information from the Response
@@ -65,4 +67,21 @@ export async function handleApiError(
     resourceName ? ` '${resourceName}'` : ""
   }: ${errors.map((error) => `${error.code}: ${error.message}`).join(", ")}`;
   throw new CloudflareApiError(errorMessage, response, errors);
+}
+
+/**
+ * Helper function to check if an error is a Cloudflare API error.
+ * Optional match criteria can be provided to check for a specific HTTP status code or error code.
+ */
+export function isCloudflareApiError(
+  error: unknown,
+  match: { status?: number; code?: number } = {},
+): error is CloudflareApiError & { errorData: CloudflareApiErrorPayload[] } {
+  return (
+    error instanceof CloudflareApiError &&
+    (match.status === undefined || error.status === match.status) &&
+    (match.code === undefined ||
+      (Array.isArray(error.errorData) &&
+        error.errorData.some((e) => "code" in e && e.code === match.code)))
+  );
 }

@@ -31,29 +31,26 @@ export interface MiniflareWorkerInput {
   cwd: string;
 }
 
-type RemoteOnlyBindingType =
-  | "ai"
-  | "browser"
-  | "dispatch_namespace"
-  | "mtls_certificate"
-  | "vectorize";
-type RemoteOptionalBindingType =
-  | "d1"
-  | "images"
-  | "kv_namespace"
-  | "queue"
-  | "r2_bucket";
-
 type RemoteBinding =
+  // Supported remote bindings that are NOT a fetcher require the `raw` flag.
   | (Extract<
       WorkerBindingSpec,
       {
-        type: RemoteOnlyBindingType | RemoteOptionalBindingType;
+        type:
+          | "ai"
+          | "browser"
+          | "dispatch_namespace"
+          | "mtls_certificate"
+          | "vectorize"
+          | "d1"
+          | "images"
+          | "kv_namespace"
+          | "queue"
+          | "r2_bucket";
       }
-    > & {
-      raw: true;
-    })
-  | WorkerBindingService;
+    > & { raw: true })
+  // Fetcher type bindings do not require the `raw` flag and will throw an error if it is present.
+  | Extract<WorkerBindingSpec, { type: "service" | "vpc_service" }>;
 
 type BaseWorkerOptions = {
   [K in keyof miniflare.WorkerOptions]: K extends
@@ -324,6 +321,15 @@ export const buildWorkerOptions = async (
         };
         break;
       }
+      case "vpc_service": {
+        remoteBindings.push({
+          type: "vpc_service",
+          name: key,
+          service_name: binding.name,
+          service_id: binding.serviceId,
+        });
+        break;
+      }
       case "worker_loader": {
         (options.workerLoaders ??= {})[key] = {};
         break;
@@ -444,6 +450,12 @@ export const buildWorkerOptions = async (
         case "vectorize":
           (options.vectorize ??= {})[binding.name] = {
             index_name: binding.index_name,
+            remoteProxyConnectionString: remoteProxy.connectionString,
+          };
+          break;
+        case "vpc_service":
+          (options.vpcServices ??= {})[binding.name] = {
+            service_id: binding.service_id,
             remoteProxyConnectionString: remoteProxy.connectionString,
           };
           break;

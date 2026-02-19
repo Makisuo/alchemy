@@ -2,7 +2,10 @@
 
 export * from "./account-api-token.ts";
 export * from "./account-id.ts";
+export * from "./ai-crawler.ts";
 export * from "./ai-gateway.ts";
+export * from "./ai-search-token.ts";
+export * from "./ai-search.ts";
 export * from "./ai.ts";
 export * from "./analytics-engine.ts";
 export * from "./api-error.ts";
@@ -70,6 +73,7 @@ export * from "./vectorize-index.ts";
 export * from "./vectorize-metadata-index.ts";
 export * from "./version-metadata.ts";
 export * from "./vite/vite.ts";
+export * from "./vpc-service.ts";
 export * from "./warp-default-profile.ts";
 export * from "./warp-device-profile.ts";
 export * from "./website.ts";

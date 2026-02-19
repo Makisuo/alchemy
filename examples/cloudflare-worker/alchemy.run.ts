@@ -1,5 +1,6 @@
 import alchemy, { type } from "alchemy";
 import {
+  AiSearch,
   DurableObjectNamespace,
   Queue,
   R2Bucket,
@@ -18,6 +19,10 @@ export const app = await alchemy("cloudflare-worker", {
 
 export const bucket = await R2Bucket("bucket", {
   empty: true,
+});
+
+export const rag = await AiSearch("rag", {
+  source: bucket,
 });
 
 export const queue = await Queue<{

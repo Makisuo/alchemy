@@ -1,3 +1,42 @@
+## v0.85.1
+
+### &nbsp;&nbsp;&nbsp;🚀 Features
+
+- **cloudflare**: AI Search &nbsp;-&nbsp; by **Gabriel Massadas**, **Sam Goodwin** and **John Royal** in https://github.com/alchemy-run/alchemy/issues/1317 [<samp>(bda7f)</samp>](https://github.com/alchemy-run/alchemy/commit/bda7f53c)
+
+### &nbsp;&nbsp;&nbsp;🐞 Bug Fixes
+
+- **cloudflare**: Erroneous replacement of r2 custom domain &nbsp;-&nbsp; by **John Royal** in https://github.com/alchemy-run/alchemy/issues/1337 [<samp>(a542a)</samp>](https://github.com/alchemy-run/alchemy/commit/a542a341)
+
+##### &nbsp;&nbsp;&nbsp;&nbsp;[View changes on GitHub](https://github.com/alchemy-run/alchemy/compare/v0.85.0...v0.85.1)
+
+---
+
+## v0.85.0
+
+### &nbsp;&nbsp;&nbsp;🚀 Features
+
+- **cloudflare**:
+  - Add new subrequests limit option for Workers &nbsp;-&nbsp; by **Jan Henning** in https://github.com/alchemy-run/alchemy/issues/1328 [<samp>(cdbc7)</samp>](https://github.com/alchemy-run/alchemy/commit/cdbc78cf)
+  - Vpc service &nbsp;-&nbsp; by **John Royal** in https://github.com/alchemy-run/alchemy/issues/1207 [<samp>(f8338)</samp>](https://github.com/alchemy-run/alchemy/commit/f8338e54)
+- **planetscale**:
+  - Default role resource, add missing props, fix erroneous promotion &nbsp;-&nbsp; by **John Royal** in https://github.com/alchemy-run/alchemy/issues/1326 [<samp>(d25e2)</samp>](https://github.com/alchemy-run/alchemy/commit/d25e2f30)
+
+### &nbsp;&nbsp;&nbsp;🐞 Bug Fixes
+
+- Propagate request abort signal to Miniflare worker proxy &nbsp;-&nbsp; by **utopy** in https://github.com/alchemy-run/alchemy/issues/1324 [<samp>(75e21)</samp>](https://github.com/alchemy-run/alchemy/commit/75e2161d)
+- **cloudflare**:
+  - Handle 404 when deleting d1 database &nbsp;-&nbsp; by **John Royal** in https://github.com/alchemy-run/alchemy/issues/1334 [<samp>(b14ba)</samp>](https://github.com/alchemy-run/alchemy/commit/b14baebc)
+  - Respect explicit accountId when using OAuth credentials &nbsp;-&nbsp; by **Benjamin Kraatz** in https://github.com/alchemy-run/alchemy/issues/1333 [<samp>(f7717)</samp>](https://github.com/alchemy-run/alchemy/commit/f77172a9)
+- **planetscale**:
+  - Honor scope.adopt option for databases &nbsp;-&nbsp; by **John Royal** in https://github.com/alchemy-run/alchemy/issues/1331 [<samp>(13e99)</samp>](https://github.com/alchemy-run/alchemy/commit/13e996df)
+- **state**:
+  - Set sqlite state store busy_timeout to 5s &nbsp;-&nbsp; by **Julien Roubieu** [<samp>(003b1)</samp>](https://github.com/alchemy-run/alchemy/commit/003b1f3a)
+
+##### &nbsp;&nbsp;&nbsp;&nbsp;[View changes on GitHub](https://github.com/alchemy-run/alchemy/compare/v0.84.0...v0.85.0)
+
+---
+
 ## v0.84.0
 
 ### &nbsp;&nbsp;&nbsp;🐞 Bug Fixes
